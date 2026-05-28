@@ -3,6 +3,28 @@ import { LoginPage } from "../pages/staff/LoginPage";
 import { StaffDashboardPage } from "../pages/staff/DashboardPage";
 import { AdminLayout } from "./admin/AdminLayout";
 import { TablesPage } from "../pages/staff/TablePage";
+import { PlatesPage } from "../pages/staff/PlatesPage";
+import { UsersPage } from "../pages/staff/UsersPage";
+import { WaitersPage } from "../pages/staff/WaitersPage";
+
+const getStoredUser = () => {
+  try {
+    const rawUser = localStorage.getItem("lhl_user");
+    return rawUser ? JSON.parse(rawUser) : null;
+  } catch {
+    return null;
+  }
+};
+
+const AdminOnly = ({ children }) => {
+  const currentUser = getStoredUser();
+
+  if (currentUser?.role !== "ADMIN") {
+    return <Navigate to="/admin" replace />;
+  }
+
+  return children;
+};
 
 export const AppRouter = () => {
   return (
@@ -21,8 +43,20 @@ export const AppRouter = () => {
         <Route index element={<StaffDashboardPage />} />
         <Route path="mesas" element={<TablesPage />} />
         <Route
+          path="usuarios"
+          element={
+            <AdminOnly>
+              <UsersPage />
+            </AdminOnly>
+          }
+        />
+        <Route
           path="meseros"
-          element={<div className="p-6">Contenido de Meseros</div>}
+          element={
+            <AdminOnly>
+              <WaitersPage />
+            </AdminOnly>
+          }
         />
         <Route
           path="reservas"
@@ -30,7 +64,11 @@ export const AppRouter = () => {
         />
         <Route
           path="platos"
-          element={<div className="p-6">Contenido del Menú</div>}
+          element={
+            <AdminOnly>
+              <PlatesPage />
+            </AdminOnly>
+          }
         />
         <Route
           path="chat"

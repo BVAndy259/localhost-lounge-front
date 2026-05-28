@@ -13,6 +13,7 @@ import {
 export const TablesPage = () => {
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentRole, setCurrentRole] = useState("ADMIN");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,6 +39,16 @@ export const TablesPage = () => {
   };
 
   useEffect(() => {
+    try {
+      const rawUser = localStorage.getItem("lhl_user");
+      if (rawUser) {
+        const user = JSON.parse(rawUser);
+        setCurrentRole(user?.role || "ADMIN");
+      }
+    } catch {
+      setCurrentRole("ADMIN");
+    }
+
     fetchTables();
   }, []);
 
@@ -170,13 +181,15 @@ export const TablesPage = () => {
             Plano de Mesas
           </h2>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2.5 rounded-sm text-sm font-medium transition-colors"
-        >
-          <Plus size={18} />
-          Nueva Mesa
-        </button>
+        {currentRole === "ADMIN" && (
+          <button
+            onClick={openCreateModal}
+            className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2.5 rounded-sm text-sm font-medium transition-colors"
+          >
+            <Plus size={18} />
+            Nueva Mesa
+          </button>
+        )}
       </header>
 
       {loading ? (
@@ -200,14 +213,16 @@ export const TablesPage = () => {
                   isActive ? "" : "opacity-60 grayscale"
                 }`}
               >
-                <button
-                  type="button"
-                  onClick={() => openEditModal(table)}
-                  className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-1 text-[11px] text-muted-foreground hover:text-white transition-colors"
-                >
-                  <PencilLine size={12} />
-                  Editar
-                </button>
+                {currentRole === "ADMIN" && (
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(table)}
+                    className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-1 text-[11px] text-muted-foreground hover:text-white transition-colors"
+                  >
+                    <PencilLine size={12} />
+                    Editar
+                  </button>
+                )}
 
                 <div className="absolute top-3 right-3 flex items-center gap-1 text-muted-foreground text-xs font-semibold">
                   <Users size={12} />
@@ -230,24 +245,26 @@ export const TablesPage = () => {
                   {styles.label}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleToggleActive(table)}
-                  className={`mt-4 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wider transition-colors ${
-                    isActive
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
-                      : "border-zinc-500/30 bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20"
-                  }`}
-                >
-                  {isActive ? "Activa" : "Inactiva"}
-                </button>
+                {currentRole === "ADMIN" && (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleActive(table)}
+                    className={`mt-4 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wider transition-colors ${
+                      isActive
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
+                        : "border-zinc-500/30 bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20"
+                    }`}
+                  >
+                    {isActive ? "Activa" : "Inactiva"}
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
       )}
 
-      {isModalOpen && (
+      {isModalOpen && currentRole === "ADMIN" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-card border border-border w-full max-w-md rounded-sm shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center p-5 border-b border-border">

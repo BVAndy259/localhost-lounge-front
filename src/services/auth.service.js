@@ -25,6 +25,11 @@ export const AuthService = {
     localStorage.removeItem("lhl_user");
   },
 
+  getCurrentUser: async () => {
+    const response = await axiosClient.get("/auth/me");
+    return response.data?.data ?? response.data ?? null;
+  },
+
   isAuthenticated: () => {
     return !!(localStorage.getItem("lhl_token") || localStorage.getItem("token"));
   },
