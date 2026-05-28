@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AuthService } from "../../services/auth.service";
 import { WaiterService } from "../../services/waiter.service";
 import {
   Plus,
@@ -14,6 +15,7 @@ import {
 export const WaitersPage = () => {
   const [waiters, setWaiters] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,8 +37,27 @@ export const WaitersPage = () => {
   };
 
   useEffect(() => {
+    const loadSession = async () => {
+      try {
+        const sessionUser = await AuthService.getCurrentUser();
+        setCurrentUser(sessionUser);
+      } catch {
+        try {
+          const rawUser = localStorage.getItem("lhl_user");
+          if (rawUser) {
+            setCurrentUser(JSON.parse(rawUser));
+          }
+        } catch (error) {
+          console.error("Error al leer usuario autenticado:", error);
+        }
+      }
+    };
+
+    loadSession();
     fetchWaiters();
   }, []);
+
+  const canManageWaiters = currentUser?.role === "ADMIN";
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -102,13 +123,19 @@ export const WaitersPage = () => {
             Meseros
           </h2>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2.5 rounded-sm text-sm font-medium transition-colors"
-        >
-          <Plus size={18} />
-          Nuevo Mesero
-        </button>
+        {canManageWaiters ? (
+          <button
+            onClick={openCreateModal}
+            className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2.5 rounded-sm text-sm font-medium transition-colors"
+          >
+            <Plus size={18} />
+            Nuevo Mesero
+          </button>
+        ) : (
+          <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
+            Solo consulta
+          </div>
+        )}
       </header>
 
       <div className="bg-card border border-border rounded-sm overflow-hidden">
@@ -131,9 +158,11 @@ export const WaitersPage = () => {
                   <th className="px-6 py-4 font-semibold tracking-wider">
                     Estado
                   </th>
-                  <th className="px-6 py-4 font-semibold tracking-wider text-right">
-                    Acciones
-                  </th>
+                  {canManageWaiters && (
+                    <th className="px-6 py-4 font-semibold tracking-wider text-right">
+                      Acciones
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -172,14 +201,16 @@ export const WaitersPage = () => {
                         {waiter.active !== false ? "Activo" : "Bloqueado"}
                       </button>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => openEditModal(waiter)}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-white transition-colors bg-secondary/50 px-3 py-1.5 rounded-sm border border-border"
-                      >
-                        <PencilLine size={14} /> Editar
-                      </button>
-                    </td>
+                    {canManageWaiters && (
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => openEditModal(waiter)}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-white transition-colors bg-secondary/50 px-3 py-1.5 rounded-sm border border-border"
+                        >
+                          <PencilLine size={14} /> Editar
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -188,7 +219,7 @@ export const WaitersPage = () => {
         )}
       </div>
 
-      {isModalOpen && (
+      {isModalOpen && canManageWaiters && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-card border border-border w-full max-w-md rounded-sm shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center p-5 border-b border-border">

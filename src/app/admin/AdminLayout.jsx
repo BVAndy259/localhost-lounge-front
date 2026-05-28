@@ -64,7 +64,6 @@ export const AdminLayout = () => {
       name: "Meseros",
       path: "/admin/meseros",
       icon: <Users size={18} />,
-      adminOnly: true,
     },
     {
       name: "Carta",
@@ -103,21 +102,21 @@ export const AdminLayout = () => {
             {navLinks
               .filter((link) => !link.adminOnly || currentUser.role === "ADMIN")
               .map((link) => {
-              const isActive = location.pathname === link.path;
-              return (
-                <Link
-                  key={link.name}
-                  to={link.path}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${
-                    isActive
-                      ? "bg-primary/10 text-primary font-medium border border-primary/20"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  }`}
-                >
-                  {link.icon}
-                  {link.name}
-                </Link>
-              );
+                const isActive = location.pathname === link.path;
+                return (
+                  <Link
+                    key={link.name}
+                    to={link.path}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${
+                      isActive
+                        ? "bg-primary/10 text-primary font-medium border border-primary/20"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    }`}
+                  >
+                    {link.icon}
+                    {link.name}
+                  </Link>
+                );
               })}
           </nav>
         </div>
@@ -163,7 +162,7 @@ export const AdminLayout = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-card to-background">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-[1600px] mx-auto">
             <Outlet />
           </div>
         </div>

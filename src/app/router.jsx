@@ -6,6 +6,7 @@ import { TablesPage } from "../pages/staff/TablePage";
 import { PlatesPage } from "../pages/staff/PlatesPage";
 import { UsersPage } from "../pages/staff/UsersPage";
 import { WaitersPage } from "../pages/staff/WaitersPage";
+import { ReservationsPage } from "../pages/staff/ReservationsPage";
 
 const getStoredUser = () => {
   try {
@@ -20,6 +21,16 @@ const AdminOnly = ({ children }) => {
   const currentUser = getStoredUser();
 
   if (currentUser?.role !== "ADMIN") {
+    return <Navigate to="/admin" replace />;
+  }
+
+  return children;
+};
+
+const StaffOnly = ({ children }) => {
+  const currentUser = getStoredUser();
+
+  if (currentUser?.role !== "ADMIN" && currentUser?.role !== "RECEPCIONISTA") {
     return <Navigate to="/admin" replace />;
   }
 
@@ -53,14 +64,18 @@ export const AppRouter = () => {
         <Route
           path="meseros"
           element={
-            <AdminOnly>
+            <StaffOnly>
               <WaitersPage />
-            </AdminOnly>
+            </StaffOnly>
           }
         />
         <Route
           path="reservas"
-          element={<div className="p-6">Contenido de Reservas</div>}
+          element={
+            <StaffOnly>
+              <ReservationsPage />
+            </StaffOnly>
+          }
         />
         <Route
           path="platos"
