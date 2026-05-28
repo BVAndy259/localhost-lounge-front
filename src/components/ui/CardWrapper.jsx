@@ -7,8 +7,6 @@ export const CardWrapper = ({ children, title }) => (
         </h3>
       </div>
     )}
-    <div className="p-6">
-      {children}
-    </div>
+    <div className="p-6">{children}</div>
   </div>
 );

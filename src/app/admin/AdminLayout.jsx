@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation } from "react-router-dom";
+import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -8,9 +8,11 @@ import {
   MessageSquare,
   Users,
 } from "lucide-react";
+import { AuthService } from "../../services/auth.service";
 
 export const AdminLayout = () => {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const navLinks = [
     { name: "Dashboard", path: "/admin", icon: <LayoutDashboard size={18} /> },
@@ -32,6 +34,11 @@ export const AdminLayout = () => {
       icon: <MessageSquare size={18} />,
     },
   ];
+
+  const handleLogout = () => {
+    AuthService.logout();
+    navigate("/admin/login");
+  };
 
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden font-sans">
@@ -70,7 +77,11 @@ export const AdminLayout = () => {
         </div>
 
         <div className="p-4 border-t border-border">
-          <button className="flex items-center gap-3 px-3 py-2.5 w-full rounded-md text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-3 py-2.5 w-full rounded-md text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+          >
             <LogOut size={18} />
             Cerrar Sesión
           </button>

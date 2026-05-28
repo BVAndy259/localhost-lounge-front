@@ -1,5 +1,8 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import { LoginPage } from "../pages/staff/LoginPage";
+import { StaffDashboardPage } from "../pages/staff/DashboardPage";
 import { AdminLayout } from "./admin/AdminLayout";
+import { TablesPage } from "../pages/staff/TablePage";
 
 export const AppRouter = () => {
   return (
@@ -13,18 +16,13 @@ export const AppRouter = () => {
         />
       </Route>
 
+      <Route path="/admin/login" element={<LoginPage />} />
       <Route path="/admin" element={<AdminLayout />}>
-        <Route
-          index
-          element={<div className="p-6">Contenido del Dashboard Principal</div>}
-        />
+        <Route index element={<StaffDashboardPage />} />
+        <Route path="mesas" element={<TablesPage />} />
         <Route
           path="meseros"
           element={<div className="p-6">Contenido de Meseros</div>}
-        />
-        <Route
-          path="mesas"
-          element={<div className="p-6">Contenido de Mesas</div>}
         />
         <Route
           path="reservas"
