@@ -157,6 +157,12 @@ export const ReservationsPage = () => {
             <Check size={12} /> Confirmada
           </span>
         );
+      case "EN_CURSO":
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-500 border border-blue-500/30">
+            <Users size={12} /> En curso
+          </span>
+        );
       case "CANCELADA":
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-destructive/10 text-destructive border border-destructive/30">
@@ -288,6 +294,7 @@ export const ReservationsPage = () => {
                           >
                             <option value="PENDIENTE">Marcar Pendiente</option>
                             <option value="CONFIRMADA">Confirmar</option>
+                            <option value="EN_CURSO">En curso</option>
                             <option value="COMPLETADA">Completar</option>
                             <option value="CANCELADA">Cancelar</option>
                           </select>

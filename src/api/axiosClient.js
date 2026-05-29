@@ -18,6 +18,14 @@ const axiosClient = axios.create({
   },
 });
 
+const clearSessionStorage = () => {
+  if (typeof window === "undefined") return;
+
+  localStorage.removeItem("lhl_token");
+  localStorage.removeItem("token");
+  localStorage.removeItem("lhl_user");
+};
+
 axiosClient.interceptors.request.use((config) => {
   const token = getStoredToken();
 
@@ -32,6 +40,14 @@ axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
     console.error("Error en API:", error.response?.data || error.message);
+
+    if (error.response?.status === 401 && typeof window !== "undefined") {
+      clearSessionStorage();
+      if (window.location.pathname !== "/admin/login") {
+        window.location.assign("/admin/login");
+      }
+    }
+
     return Promise.reject(error);
   },
 );

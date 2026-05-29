@@ -18,6 +18,8 @@ export const ReservationService = {
   getById: (id) => axiosClient.get(`/reservations/${id}`),
   create: (data) => axiosClient.post("/reservations", data),
   update: (id, data) => axiosClient.put(`/reservations/${id}`, data),
+  assignWaiter: (id, waiter_id) =>
+    axiosClient.patch(`/reservations/${id}/waiter`, { waiter_id }),
   updateStatus: (id, status) =>
     axiosClient.patch(`/reservations/${id}/status`, { status }),
 };

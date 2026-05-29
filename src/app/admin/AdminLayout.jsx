@@ -34,6 +34,14 @@ export const AdminLayout = () => {
     },
   );
 
+  useEffect(() => {
+    const stopMonitoring = AuthService.startSessionMonitor(() => {
+      navigate("/admin/login", { replace: true });
+    });
+
+    return stopMonitoring;
+  }, [navigate]);
+
   const getInitials = (name) => {
     if (!name) return "AD";
     const parts = name.split(" ");

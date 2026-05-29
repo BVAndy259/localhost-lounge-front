@@ -24,6 +24,7 @@ export const TableService = {
   getById: (id) => axiosClient.get(`/tables/${id}`),
   create: (data) => axiosClient.post("/tables", data),
   update: (id, data) => axiosClient.put(`/tables/${id}`, data),
+  changeStatus: (id, data) => axiosClient.patch(`/tables/${id}/status`, data),
   toggleActive: (id, active) =>
     axiosClient.patch(`/tables/${id}/active`, { active }),
 };

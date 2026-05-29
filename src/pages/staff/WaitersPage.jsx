@@ -12,10 +12,93 @@ import {
   UserCog,
 } from "lucide-react";
 
+const peruDateFormatter = new Intl.DateTimeFormat("es-PE", {
+  timeZone: "America/Lima",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const SLASH_DATE_RE = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+
+const getDatePartsValue = (date) => {
+  const parts = peruDateFormatter.formatToParts(date);
+  const day = parts.find((part) => part.type === "day")?.value ?? "01";
+  const month = parts.find((part) => part.type === "month")?.value ?? "01";
+  const year = parts.find((part) => part.type === "year")?.value ?? "1970";
+
+  return `${year}-${month}-${day}`;
+};
+
+const getDateInputValue = (value) => {
+  if (!value) return "";
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return "";
+
+    return getDatePartsValue(value);
+  }
+
+  if (typeof value === "string") {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) return "";
+
+    if (ISO_DATE_RE.test(trimmedValue)) {
+      return trimmedValue;
+    }
+
+    const slashMatch = trimmedValue.match(SLASH_DATE_RE);
+    if (slashMatch) {
+      return `${slashMatch[3]}-${slashMatch[2]}-${slashMatch[1]}`;
+    }
+
+    const datetimeMatch = trimmedValue.match(/^(\d{4}-\d{2}-\d{2})[T\s]/);
+    if (datetimeMatch) {
+      return datetimeMatch[1];
+    }
+
+    const date = new Date(trimmedValue);
+    if (!Number.isNaN(date.getTime())) {
+      return getDatePartsValue(date);
+    }
+  }
+
+  return "";
+};
+
+const getPeruTodayInputValue = () => getDateInputValue(new Date());
+
+const getWaiterLoadState = (tablesCount) => {
+
+  if (tablesCount === 0) {
+    return {
+      label: "Libre",
+      tone:
+        "border-emerald-500/30 bg-emerald-500/10 text-emerald-500",
+    };
+  }
+
+  if (tablesCount >= 3) {
+    return {
+      label: "Ocupado hoy",
+      tone:
+        "border-destructive/30 bg-destructive/10 text-destructive",
+    };
+  }
+
+  return {
+    label: "Con mesas",
+    tone:
+      "border-amber-500/30 bg-amber-500/10 text-amber-500",
+  };
+};
+
 export const WaitersPage = () => {
   const [waiters, setWaiters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+  const [dateFilter, setDateFilter] = useState(getPeruTodayInputValue());
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,6 +141,25 @@ export const WaitersPage = () => {
   }, []);
 
   const canManageWaiters = currentUser?.role === "ADMIN";
+
+  const filteredWaiters = waiters.map((waiter) => {
+    const reservationsByDate = waiter.reservations?.filter((reservation) => {
+      return getDateInputValue(reservation.reservation_date) === dateFilter;
+    }) ?? [];
+
+    const tablesByDate = Array.from(
+      new Map(
+        reservationsByDate.map((reservation) => [reservation.table.id, reservation.table])
+      ).values()
+    );
+
+    return {
+      ...waiter,
+      filtered_reservations: reservationsByDate,
+      filtered_tables: tablesByDate,
+      filtered_tables_count: tablesByDate.length,
+    };
+  });
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -138,6 +240,36 @@ export const WaitersPage = () => {
         )}
       </header>
 
+      <div className="rounded-md border border-border bg-card/50 p-4 flex flex-wrap items-end gap-3">
+        <div className="space-y-2 min-w-48">
+          <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+            Fecha
+          </label>
+          <input
+            type="date"
+            value={dateFilter}
+            onChange={(event) => setDateFilter(event.target.value)}
+            className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setDateFilter(getPeruTodayInputValue())}
+          className="rounded-sm border border-border px-4 py-2.5 text-sm text-muted-foreground hover:text-white hover:border-primary transition-colors"
+        >
+          Hoy
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setDateFilter("")}
+          className="rounded-sm border border-border px-4 py-2.5 text-sm text-muted-foreground hover:text-white hover:border-primary transition-colors"
+        >
+          Ver todo
+        </button>
+      </div>
+
       <div className="bg-card border border-border rounded-sm overflow-hidden">
         {loading ? (
           <div className="p-10 text-center text-zinc-500 animate-pulse">
@@ -158,6 +290,9 @@ export const WaitersPage = () => {
                   <th className="px-6 py-4 font-semibold tracking-wider">
                     Estado
                   </th>
+                  <th className="px-6 py-4 font-semibold tracking-wider">
+                    Mesas
+                  </th>
                   {canManageWaiters && (
                     <th className="px-6 py-4 font-semibold tracking-wider text-right">
                       Acciones
@@ -166,7 +301,11 @@ export const WaitersPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {waiters.map((waiter) => (
+                {filteredWaiters.map((waiter) => {
+                  const tablesCount = waiter.filtered_tables_count ?? 0;
+                  const loadState = getWaiterLoadState(tablesCount);
+
+                  return (
                   <tr key={waiter.id} className="hover:bg-secondary/10 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
@@ -185,21 +324,61 @@ export const WaitersPage = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <button
-                        onClick={() => handleToggleStatus(waiter)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] font-bold uppercase tracking-wider transition-colors border ${
-                          waiter.active !== false
-                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
-                            : "border-zinc-500/30 bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20"
-                        }`}
-                      >
-                        {waiter.active !== false ? (
-                          <CheckCircle2 size={12} />
-                        ) : (
-                          <Ban size={12} />
-                        )}
-                        {waiter.active !== false ? "Activo" : "Bloqueado"}
-                      </button>
+                      <div className="space-y-2">
+                        <button
+                          onClick={() => handleToggleStatus(waiter)}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] font-bold uppercase tracking-wider transition-colors border ${
+                            waiter.active !== false
+                              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
+                              : "border-zinc-500/30 bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20"
+                          }`}
+                        >
+                          {waiter.active !== false ? (
+                            <CheckCircle2 size={12} />
+                          ) : (
+                            <Ban size={12} />
+                          )}
+                          {waiter.active !== false ? "Activo" : "Bloqueado"}
+                        </button>
+
+                        <div className="text-xs text-muted-foreground">
+                          {waiter.active !== false
+                            ? tablesCount >= 3
+                              ? "Llegó al límite de hoy"
+                              : "Disponible para asignación"
+                            : "No recibe nuevas mesas"}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="space-y-2">
+                        <div
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] font-bold uppercase tracking-wider border ${loadState.tone}`}
+                        >
+                          {loadState.label}
+                        </div>
+
+                        <div className="text-xs text-muted-foreground">
+                          {tablesCount} mesa(s) en la fecha
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {waiter.filtered_tables?.length ? (
+                            waiter.filtered_tables.map((table) => (
+                              <span
+                                key={table.id}
+                                className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/30 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+                              >
+                                Mesa {table.table_number} · {table.status}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              Sin mesas para la fecha seleccionada
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     {canManageWaiters && (
                       <td className="px-6 py-4 text-right">
@@ -212,7 +391,8 @@ export const WaitersPage = () => {
                       </td>
                     )}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
