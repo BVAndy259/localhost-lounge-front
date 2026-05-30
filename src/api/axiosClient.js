@@ -15,6 +15,8 @@ const axiosClient = axios.create({
   baseURL: "http://localhost:3000/api",
   headers: {
     "Content-Type": "application/json",
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
   },
 });
 
@@ -31,6 +33,13 @@ axiosClient.interceptors.request.use((config) => {
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  if (config.method === "get") {
+    config.params = {
+      ...(config.params || {}),
+      _ts: Date.now(),
+    };
   }
 
   return config;

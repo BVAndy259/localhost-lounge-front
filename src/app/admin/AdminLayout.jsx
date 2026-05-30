@@ -3,6 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   CalendarDays,
+  ReceiptText,
   Armchair,
   UtensilsCrossed,
   LogOut,
@@ -12,6 +13,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { AuthService } from "../../services/auth.service";
+import { FloatingChatWidget } from "../../components/chat/FloatingChatWidget";
 
 const getStoredUser = () => {
   try {
@@ -60,6 +62,11 @@ export const AdminLayout = () => {
       name: "Reservas",
       path: "/admin/reservas",
       icon: <CalendarDays size={18} />,
+    },
+    {
+      name: "Órdenes",
+      path: "/admin/ordenes",
+      icon: <ReceiptText size={18} />,
     },
     { name: "Mesas", path: "/admin/mesas", icon: <Armchair size={18} /> },
     {
@@ -174,6 +181,8 @@ export const AdminLayout = () => {
             <Outlet />
           </div>
         </div>
+
+        <FloatingChatWidget variant="staff" />
 
         {isLogoutModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">

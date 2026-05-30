@@ -8,6 +8,9 @@ import { PlatesPage } from "../pages/staff/PlatesPage";
 import { UsersPage } from "../pages/staff/UsersPage";
 import { WaitersPage } from "../pages/staff/WaitersPage";
 import { ReservationsPage } from "../pages/staff/ReservationsPage";
+import { InternalChatPage } from "../pages/staff/InternalChatPage";
+import { POSPage } from "../pages/staff/POSPage";
+import { OrdersPage } from "../pages/staff/OrdersPage";
 import { AuthService } from "../services/auth.service";
 
 const getStoredUser = () => {
@@ -97,7 +100,27 @@ export const AppRouter = () => {
         />
         <Route
           path="chat"
-          element={<div className="p-6">Contenido del Chatbot Interno</div>}
+          element={
+            <StaffOnly>
+              <InternalChatPage />
+            </StaffOnly>
+          }
+        />
+        <Route
+          path="ordenes"
+          element={
+            <StaffOnly>
+              <OrdersPage />
+            </StaffOnly>
+          }
+        />
+        <Route
+          path="mesas/:tableId/pos"
+          element={
+            <StaffOnly>
+              <POSPage />
+            </StaffOnly>
+          }
         />
       </Route>
 
@@ -105,3 +128,5 @@ export const AppRouter = () => {
     </Routes>
   );
 };
+
+export default AppRouter;

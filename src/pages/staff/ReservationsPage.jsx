@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { TableService } from "../../services/table.service";
 import { ReservationService } from "../../services/reservation.service";
 import {
-  Plus,
   CalendarDays,
   Clock,
   Users,
@@ -17,6 +16,9 @@ export const ReservationsPage = () => {
   const [loadingReservations, setLoadingReservations] = useState(true);
   const [loadingTables, setLoadingTables] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [clientPickerValue, setClientPickerValue] = useState("");
 
   const [formData, setFormData] = useState({
     table_id: "",
@@ -33,6 +35,25 @@ export const ReservationsPage = () => {
   const selectedTable = tables.find(
     (table) => String(table.id) === String(formData.table_id),
   );
+
+  const knownClients = useMemo(() => {
+    const byId = new Map();
+
+    for (const reservation of reservations) {
+      const client = reservation.client;
+      if (client?.id && !byId.has(client.id)) {
+        byId.set(client.id, client);
+      }
+    }
+
+    return Array.from(byId.values());
+  }, [reservations]);
+
+  const buildClientPickerOption = (client) => {
+    const fullName = `${client.name || ""} ${client.last_name || ""}`.trim();
+    const contact = client.phone_number || client.email || "sin contacto";
+    return `${client.id} - ${fullName} - ${contact}`;
+  };
 
   const fetchReservations = async () => {
     setLoadingReservations(true);
@@ -63,24 +84,11 @@ export const ReservationsPage = () => {
     fetchTables();
   }, []);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-
-    if (name === "table_id") {
-      const nextTable = tables.find((table) => String(table.id) === value);
-      setFormData((current) => ({
-        ...current,
-        table_id: value,
-        number_people: nextTable?.capacity || current.number_people,
-      }));
-      return;
-    }
-
-    setFormData((current) => ({ ...current, [name]: value }));
-  };
-
   const resetForm = () => {
     const today = new Date().toISOString().split("T")[0];
+
+    setSelectedClientId("");
+    setClientPickerValue("");
     setFormData({
       table_id: "",
       client_name: "",
@@ -98,8 +106,58 @@ export const ReservationsPage = () => {
     resetForm();
   }, [tables]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleInputChange = (event) => {
+    const { name, value } = event.target;
+
+    if (name === "table_id") {
+      const nextTable = tables.find((table) => String(table.id) === value);
+      setFormData((current) => ({
+        ...current,
+        table_id: value,
+        number_people: nextTable?.capacity || current.number_people,
+      }));
+      return;
+    }
+
+    if (
+      name === "client_name" ||
+      name === "client_last_name" ||
+      name === "client_phone_number" ||
+      name === "client_email"
+    ) {
+      setSelectedClientId("");
+      setClientPickerValue("");
+    }
+
+    setFormData((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleClientPickerChange = (event) => {
+    const inputValue = event.target.value;
+    setClientPickerValue(inputValue);
+
+    const selectedClient = knownClients.find(
+      (client) => buildClientPickerOption(client) === inputValue,
+    );
+
+    if (!selectedClient) {
+      setSelectedClientId("");
+      return;
+    }
+
+    setSelectedClientId(String(selectedClient.id));
+
+    setFormData((current) => ({
+      ...current,
+      client_name: selectedClient.name || "",
+      client_last_name: selectedClient.last_name || "",
+      client_phone_number: selectedClient.phone_number || "",
+      client_email: selectedClient.email || "",
+    }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setIsSubmitting(true);
 
     try {
@@ -109,12 +167,16 @@ export const ReservationsPage = () => {
         reservation_time: formData.reservation_time,
         number_people: Number(formData.number_people),
         notes: formData.notes.trim(),
-        client_data: {
-          name: formData.client_name.trim(),
-          last_name: formData.client_last_name.trim(),
-          phone_number: formData.client_phone_number.trim(),
-          email: formData.client_email.trim(),
-        },
+        ...(selectedClientId
+          ? { client_id: Number(selectedClientId) }
+          : {
+              client_data: {
+                name: formData.client_name.trim(),
+                last_name: formData.client_last_name.trim(),
+                phone_number: formData.client_phone_number.trim(),
+                email: formData.client_email.trim(),
+              },
+            }),
       };
 
       await ReservationService.create(payload);
@@ -129,6 +191,7 @@ export const ReservationsPage = () => {
             .map((item) => `${item.path?.join(".") || "campo"}: ${item.message}`)
             .join(" | ")
         : "";
+
       alert(
         backendError
           ? `${backendError}${detailsText ? `\n${detailsText}` : ""}`
@@ -145,6 +208,7 @@ export const ReservationsPage = () => {
       fetchReservations();
     } catch (error) {
       console.error("Error al cambiar estado:", error);
+      alert(error?.response?.data?.error || "No se pudo actualizar el estado");
     }
   };
 
@@ -186,7 +250,8 @@ export const ReservationsPage = () => {
 
   const today = new Date().toISOString().split("T")[0];
 
-  const panelGridClass = "grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(380px,1fr)] 2xl:grid-cols-[minmax(0,1.7fr)_minmax(420px,0.95fr)]";
+  const panelGridClass =
+    "grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(380px,1fr)] 2xl:grid-cols-[minmax(0,1.7fr)_minmax(420px,0.95fr)]";
 
   return (
     <section className="space-y-6 relative">
@@ -195,9 +260,7 @@ export const ReservationsPage = () => {
           <p className="text-[11px] uppercase tracking-[0.35em] text-primary">
             Recepción y Host
           </p>
-          <h2 className="mt-3 text-3xl font-semibold text-white">
-            Libro de Reservas
-          </h2>
+          <h2 className="mt-3 text-3xl font-semibold text-white">Libro de Reservas</h2>
         </div>
       </header>
 
@@ -216,21 +279,11 @@ export const ReservationsPage = () => {
               <table className="w-full text-sm text-left">
                 <thead className="text-xs uppercase bg-secondary/30 text-muted-foreground border-b border-border">
                   <tr>
-                    <th className="px-6 py-4 font-semibold tracking-wider">
-                      Cliente
-                    </th>
-                    <th className="px-6 py-4 font-semibold tracking-wider">
-                      Fecha y Hora
-                    </th>
-                    <th className="px-6 py-4 font-semibold tracking-wider">
-                      Mesa / Pax
-                    </th>
-                    <th className="px-6 py-4 font-semibold tracking-wider">
-                      Estado
-                    </th>
-                    <th className="px-6 py-4 font-semibold tracking-wider text-right">
-                      Acciones
-                    </th>
+                    <th className="px-6 py-4 font-semibold tracking-wider">Cliente</th>
+                    <th className="px-6 py-4 font-semibold tracking-wider">Fecha y Hora</th>
+                    <th className="px-6 py-4 font-semibold tracking-wider">Mesa / Pax</th>
+                    <th className="px-6 py-4 font-semibold tracking-wider">Estado</th>
+                    <th className="px-6 py-4 font-semibold tracking-wider text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -241,10 +294,7 @@ export const ReservationsPage = () => {
                     const tableLabel = res.table?.table_number || res.table_id || "N/A";
 
                     return (
-                      <tr
-                        key={res.id}
-                        className="hover:bg-secondary/10 transition-colors"
-                      >
+                      <tr key={res.id} className="hover:bg-secondary/10 transition-colors">
                         <td className="px-6 py-4">
                           <p className="font-bold text-white">{clientName}</p>
                           <p className="text-xs text-muted-foreground">
@@ -257,10 +307,7 @@ export const ReservationsPage = () => {
                         <td className="px-6 py-4">
                           <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-1.5 text-white">
-                              <CalendarDays
-                                size={14}
-                                className="text-muted-foreground"
-                              />
+                              <CalendarDays size={14} className="text-muted-foreground" />
                               <span>{res.reservation_date || "N/A"}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
@@ -275,7 +322,7 @@ export const ReservationsPage = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-1.5 text-white bg-secondary/50 inline-flex px-2 py-1 rounded-sm border border-border">
+                          <div className="inline-flex items-center gap-1.5 text-white bg-secondary/50 px-2 py-1 rounded-sm border border-border">
                             <Users size={14} className="text-primary" />
                             <span className="font-bold">{tableLabel}</span>
                             <span className="text-xs text-muted-foreground ml-1">
@@ -288,14 +335,11 @@ export const ReservationsPage = () => {
                           <select
                             className="bg-background border border-border text-xs rounded-sm px-2 py-1.5 text-muted-foreground focus:outline-none focus:border-primary cursor-pointer"
                             value={res.status || "PENDIENTE"}
-                            onChange={(e) =>
-                              handleStatusChange(res.id, e.target.value)
-                            }
+                            onChange={(event) => handleStatusChange(res.id, event.target.value)}
                           >
                             <option value="PENDIENTE">Marcar Pendiente</option>
                             <option value="CONFIRMADA">Confirmar</option>
                             <option value="EN_CURSO">En curso</option>
-                            <option value="COMPLETADA">Completar</option>
                             <option value="CANCELADA">Cancelar</option>
                           </select>
                         </td>
@@ -310,12 +354,8 @@ export const ReservationsPage = () => {
 
         <div className="bg-card border border-border rounded-sm overflow-hidden h-fit">
           <div className="p-5 border-b border-border">
-            <p className="text-[11px] uppercase tracking-[0.35em] text-primary">
-              Alta Rápida
-            </p>
-            <h3 className="mt-2 text-xl font-semibold text-white">
-              Agendar Reserva
-            </h3>
+            <p className="text-[11px] uppercase tracking-[0.35em] text-primary">Alta Rápida</p>
+            <h3 className="mt-2 text-xl font-semibold text-white">Agendar Reserva</h3>
           </div>
 
           <form onSubmit={handleSubmit} className="p-5 space-y-4">
@@ -340,9 +380,32 @@ export const ReservationsPage = () => {
               </select>
               {selectedTable && (
                 <p className="text-[11px] text-emerald-500/90 font-medium">
-                  Capacidad detectada: {selectedTable.capacity} personas. El valor de pax se ajusta automáticamente.
+                  Capacidad detectada: {selectedTable.capacity} personas. El valor de pax se ajusta
+                  automáticamente.
                 </p>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                Cliente existente (buscar o seleccionar)
+              </label>
+              <input
+                type="text"
+                list="known-clients-list"
+                value={clientPickerValue}
+                onChange={handleClientPickerChange}
+                className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="Escribe para filtrar por nombre, correo o teléfono"
+              />
+              <datalist id="known-clients-list">
+                {knownClients.map((client) => (
+                  <option key={client.id} value={buildClientPickerOption(client)} />
+                ))}
+              </datalist>
+              <p className="text-[11px] text-muted-foreground">
+                Si no seleccionas una sugerencia, se registrará como cliente nuevo/manual.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

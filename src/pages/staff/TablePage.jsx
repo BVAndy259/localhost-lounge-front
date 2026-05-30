@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { TableService } from "../../services/table.service";
 import { ReservationService } from "../../services/reservation.service";
 import { WaiterService } from "../../services/waiter.service";
@@ -77,6 +78,7 @@ const getDateInputValue = (value) => {
 const getPeruTodayInputValue = () => getDateInputValue(new Date());
 
 export const TablesPage = () => {
+  const navigate = useNavigate();
   const [tables, setTables] = useState([]);
   const [waiters, setWaiters] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -517,12 +519,14 @@ export const TablesPage = () => {
                   Mesa {selectedTable.table_number}
                 </h3>
               </div>
-              <button
-                onClick={closeDetailModal}
-                className="text-muted-foreground hover:text-white transition-colors"
-              >
-                <X size={20} />
-              </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={closeDetailModal}
+                    className="text-muted-foreground hover:text-white transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
             </div>
 
             <div className="p-5 space-y-5">
@@ -585,41 +589,45 @@ export const TablesPage = () => {
                             </div>
                           </div>
 
-                          {currentRole === "ADMIN" && (
-                            <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-border pt-3">
-                              <div className="min-w-56 flex-1 space-y-2">
-                                <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                                  Asignar mesero a esta hora
-                                </label>
-                                <select
-                                  value={reservationWaiterSelections[reservation.id] || ""}
-                                  onChange={(event) =>
-                                    setReservationWaiterSelections((current) => ({
-                                      ...current,
-                                      [reservation.id]: event.target.value,
-                                    }))
-                                  }
-                                  className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary"
-                                >
-                                  <option value="">Selecciona un mesero</option>
-                                  {availableWaiters.map((waiter) => (
-                                    <option key={waiter.id} value={waiter.id}>
-                                      {waiter.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
+                          <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-border pt-3">
+                            {currentRole === "ADMIN" && (
+                              <>
+                                <div className="min-w-56 flex-1 space-y-2">
+                                  <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                                    Asignar mesero a esta hora
+                                  </label>
+                                  <select
+                                    value={reservationWaiterSelections[reservation.id] || ""}
+                                    onChange={(event) =>
+                                      setReservationWaiterSelections((current) => ({
+                                        ...current,
+                                        [reservation.id]: event.target.value,
+                                      }))
+                                    }
+                                    className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                                  >
+                                    <option value="">Selecciona un mesero</option>
+                                    {availableWaiters.map((waiter) => (
+                                      <option key={waiter.id} value={waiter.id}>
+                                        {waiter.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
 
-                              <button
-                                type="button"
-                                onClick={() => handleAssignReservationWaiter(reservation.id)}
-                                disabled={assigningWaiter}
-                                className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2.5 rounded-sm text-sm font-medium transition-colors disabled:opacity-50"
-                              >
-                                {assigningWaiter ? "Asignando..." : "Asignar"}
-                              </button>
-                            </div>
-                          )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleAssignReservationWaiter(reservation.id)}
+                                  disabled={assigningWaiter}
+                                  className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2.5 rounded-sm text-sm font-medium transition-colors disabled:opacity-50"
+                                >
+                                  {assigningWaiter ? "Asignando..." : "Asignar"}
+                                </button>
+                              </>
+                            )}
+
+                            {/* No navigation to Orders or POS from Tables: order management happens in Órdenes */}
+                          </div>
                         </div>
                       );
                     })}
