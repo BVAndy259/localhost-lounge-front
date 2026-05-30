@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { LandingPage } from "../pages/public/LandingPage";
+import { ReservationPage } from "../pages/public/ReservationPage";
 import { LoginPage } from "../pages/staff/LoginPage";
 import { StaffDashboardPage } from "../pages/staff/DashboardPage";
 import { AdminLayout } from "./admin/AdminLayout";
@@ -56,6 +57,7 @@ export const AppRouter = () => {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/reservar" element={<ReservationPage />} />
 
       <Route path="/admin/login" element={<LoginPage />} />
       <Route

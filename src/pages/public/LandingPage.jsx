@@ -1,30 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { PlateService } from "../../services/plate.service";
-import { ReservationService } from "../../services/reservation.service";
 import { FloatingChatWidget } from "../../components/chat/FloatingChatWidget";
 import {
   Terminal,
   CalendarCheck,
   UtensilsCrossed,
-  ChevronRight,
-  CheckCircle2,
 } from "lucide-react";
 
 export const LandingPage = () => {
   const [plates, setPlates] = useState([]);
   const [loadingMenu, setLoadingMenu] = useState(true);
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [reservationSuccess, setReservationSuccess] = useState(false);
-  const [formData, setFormData] = useState({
-    customer_name: "",
-    customer_phone: "",
-    reservation_date: "",
-    reservation_time: "",
-    guests: 2,
-    notes: "",
-  });
 
   useEffect(() => {
     const fetchPublicMenu = async () => {
@@ -39,38 +25,6 @@ export const LandingPage = () => {
     };
     fetchPublicMenu();
   }, []);
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-  };
-
-  const handleReservationSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      await ReservationService.create({
-        ...formData,
-        guests: Number(formData.guests),
-        status: "PENDIENTE",
-      });
-      setReservationSuccess(true);
-      setFormData({
-        customer_name: "",
-        customer_phone: "",
-        reservation_date: "",
-        reservation_time: "",
-        guests: 2,
-        notes: "",
-      });
-
-      setTimeout(() => setReservationSuccess(false), 5000);
-    } catch (error) {
-      alert("Hubo un error al procesar tu reserva. Intenta nuevamente.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const categories = [...new Set(plates.map((p) => p.category))];
 
@@ -91,12 +45,12 @@ export const LandingPage = () => {
             >
               Nuestra Carta
             </a>
-            <a
-              href="#reservar"
+            <Link
+              to="/reservar"
               className="text-sm font-medium text-muted-foreground hover:text-white transition-colors hidden md:block"
             >
               Reservar Mesa
-            </a>
+            </Link>
             <Link
               to="/admin/login"
               className="text-xs tracking-[0.2em] uppercase font-bold text-primary/70 hover:text-primary transition-colors border border-primary/20 px-3 py-1.5 rounded-sm"
@@ -123,13 +77,13 @@ export const LandingPage = () => {
           inspirado en el desarrollo de software.
         </p>
         <div className="flex flex-col sm:flex-row gap-4">
-          <a
-            href="#reservar"
+          <Link
+            to="/reservar"
             className="bg-primary text-primary-foreground px-8 py-3.5 rounded-sm font-semibold flex items-center justify-center gap-2 hover:bg-primary/90 transition-all"
           >
             <CalendarCheck size={18} />
             Agendar un Deployment (Reserva)
-          </a>
+          </Link>
           <a
             href="#menu"
             className="bg-secondary text-white px-8 py-3.5 rounded-sm font-semibold flex items-center justify-center gap-2 hover:bg-secondary/80 transition-all border border-border"
@@ -213,133 +167,21 @@ export const LandingPage = () => {
         </div>
       </section>
 
-      <section id="reservar" className="py-24 px-6 relative">
-        <div className="max-w-xl mx-auto bg-card border border-border p-8 sm:p-10 rounded-sm shadow-2xl relative z-10">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl font-black text-white uppercase tracking-wider mb-2">
-              Haz tu Reserva
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Asegura tu espacio en nuestro servidor.
-            </p>
-          </div>
-
-          {reservationSuccess ? (
-            <div className="bg-emerald-500/10 border border-emerald-500/30 p-6 rounded-sm text-center animate-in zoom-in duration-300">
-              <CheckCircle2
-                size={48}
-                className="text-emerald-500 mx-auto mb-4"
-              />
-              <h3 className="text-lg font-bold text-emerald-500 mb-2">
-                ¡Reserva Enviada Exitosamente!
-              </h3>
-              <p className="text-sm text-white">
-                Nuestro equipo de Host verificará la disponibilidad y te
-                esperamos en la fecha indicada. ¡Gracias por elegir LocalHost!
-              </p>
-            </div>
-          ) : (
-            <form onSubmit={handleReservationSubmit} className="space-y-5">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                  Tu Nombre Completo
-                </label>
-                <input
-                  type="text"
-                  name="customer_name"
-                  required
-                  value={formData.customer_name}
-                  onChange={handleInputChange}
-                  className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm px-4 py-3 focus:outline-none focus:border-primary transition-colors"
-                  placeholder="Ej. Linus Torvalds"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                    Teléfono Celular
-                  </label>
-                  <input
-                    type="tel"
-                    name="customer_phone"
-                    required
-                    value={formData.customer_phone}
-                    onChange={handleInputChange}
-                    className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm px-4 py-3 focus:outline-none focus:border-primary transition-colors"
-                    placeholder="+51 999 888 777"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                    Personas (Pax)
-                  </label>
-                  <input
-                    type="number"
-                    name="guests"
-                    min="1"
-                    max="20"
-                    required
-                    value={formData.guests}
-                    onChange={handleInputChange}
-                    className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm px-4 py-3 focus:outline-none focus:border-primary transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                    Fecha
-                  </label>
-                  <input
-                    type="date"
-                    name="reservation_date"
-                    required
-                    value={formData.reservation_date}
-                    onChange={handleInputChange}
-                    className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm px-4 py-3 focus:outline-none focus:border-primary transition-colors"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                    Hora
-                  </label>
-                  <input
-                    type="time"
-                    name="reservation_time"
-                    required
-                    value={formData.reservation_time}
-                    onChange={handleInputChange}
-                    className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm px-4 py-3 focus:outline-none focus:border-primary transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                  Solicitudes Especiales (Opcional)
-                </label>
-                <textarea
-                  name="notes"
-                  rows="2"
-                  value={formData.notes}
-                  onChange={handleInputChange}
-                  className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm px-4 py-3 focus:outline-none focus:border-primary transition-colors resize-none"
-                  placeholder="Alergias, celebración especial..."
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-widest text-sm py-4 rounded-sm transition-all flex justify-center items-center gap-2 mt-4 disabled:opacity-50"
-              >
-                {isSubmitting ? "Procesando..." : "Confirmar Reserva"}{" "}
-                <ChevronRight size={18} />
-              </button>
-            </form>
-          )}
+      <section className="py-24 px-6 relative bg-secondary/10 border-y border-border">
+        <div className="max-w-xl mx-auto text-center">
+          <h2 className="text-3xl font-black text-white uppercase tracking-wider mb-4">
+            ¿Listo para tu visita?
+          </h2>
+          <p className="text-muted-foreground mb-8">
+            Reserva tu mesa en LocalHost Lounge y asegura tu espacio.
+          </p>
+          <Link
+            to="/reservar"
+            className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-8 py-4 rounded-sm font-bold uppercase tracking-widest hover:bg-primary/90 transition-all"
+          >
+            <CalendarCheck size={20} />
+            Reservar Ahora
+          </Link>
         </div>
       </section>
 

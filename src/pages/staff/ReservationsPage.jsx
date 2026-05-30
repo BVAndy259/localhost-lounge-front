@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { TableService } from "../../services/table.service";
 import { ReservationService } from "../../services/reservation.service";
 import {
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 
 export const ReservationsPage = () => {
+  const location = useLocation();
   const [reservations, setReservations] = useState([]);
   const [tables, setTables] = useState([]);
   const [loadingReservations, setLoadingReservations] = useState(true);
@@ -48,6 +50,29 @@ export const ReservationsPage = () => {
 
     return Array.from(byId.values());
   }, [reservations]);
+
+  const searchQuery = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return (params.get("q") || "").trim().toLowerCase();
+  }, [location.search]);
+
+  const visibleReservations = useMemo(() => {
+    if (!searchQuery) return reservations;
+
+    return reservations.filter((reservation) => {
+      const clientName = `${reservation.client?.name || ""} ${reservation.client?.last_name || ""}`.toLowerCase();
+      const phone = (reservation.client?.phone_number || "").toLowerCase();
+      const email = (reservation.client?.email || "").toLowerCase();
+      const tableNumber = String(reservation.table?.table_number || reservation.table_id || "").toLowerCase();
+      const status = String(reservation.status || "").toLowerCase();
+      const date = String(reservation.reservation_date || "").toLowerCase();
+      const id = String(reservation.id || "").toLowerCase();
+
+      return [clientName, phone, email, tableNumber, status, date, id].some((value) =>
+        value.includes(searchQuery),
+      );
+    });
+  }, [reservations, searchQuery]);
 
   const buildClientPickerOption = (client) => {
     const fullName = `${client.name || ""} ${client.last_name || ""}`.trim();
@@ -270,9 +295,11 @@ export const ReservationsPage = () => {
             <div className="p-10 text-center text-zinc-500 animate-pulse">
               Cargando libro de reservas...
             </div>
-          ) : reservations.length === 0 ? (
+          ) : visibleReservations.length === 0 ? (
             <div className="p-10 text-center text-muted-foreground">
-              No hay reservas programadas para mostrar.
+              {searchQuery
+                ? `No encontré reservas que coincidan con "${searchQuery}".`
+                : "No hay reservas programadas para mostrar."}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -287,7 +314,7 @@ export const ReservationsPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {reservations.map((res) => {
+                  {visibleReservations.map((res) => {
                     const clientName = res.client
                       ? `${res.client.name} ${res.client.last_name}`
                       : "Sin cliente";

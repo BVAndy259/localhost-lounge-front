@@ -1,3 +1,5 @@
+import axiosClient from "../api/axiosClient";
+
 const CHAT_SCOPES = {
   public: {
     storageKey: "lhl_chat_messages_public_ai",
@@ -23,6 +25,11 @@ const CHAT_SCOPES = {
       },
     ],
   },
+};
+
+const WEB_SESSION_KEYS = {
+  staff: "lhl_chat_session_staff_ai",
+  public: "lhl_chat_session_public_ai",
 };
 
 const UPDATE_EVENT = "lhl_chat_updated";
@@ -58,6 +65,22 @@ const notify = (scope, messages) => {
 };
 
 const normalizePrompt = (text) => (text || "").trim().toLowerCase();
+
+const getOrCreateSessionToken = (scope = "public") => {
+  if (typeof window === "undefined") return `server-${scope}`;
+
+  const storageKey = WEB_SESSION_KEYS[scope] || WEB_SESSION_KEYS.public;
+  const existingToken = localStorage.getItem(storageKey);
+  if (existingToken) return existingToken;
+
+  const nextToken =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${scope}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  localStorage.setItem(storageKey, nextToken);
+  return nextToken;
+};
 
 const getPublicAssistantReply = (prompt) => {
   if (prompt.includes("reserva") || prompt.includes("mesa")) {
@@ -117,13 +140,14 @@ export const ChatService = {
     notify(scope, messages);
   },
 
-  addMessage: (scope = "public", { sender, role = "USER", text }) => {
+  addMessage: (scope = "public", { sender, role = "USER", text, ...extra }) => {
     const nextMessage = {
       id: Date.now() + Math.floor(Math.random() * 1000),
       sender,
       role,
       text,
       time: getNowTime(),
+      ...extra,
     };
 
     const current = ChatService.getMessages(scope);
@@ -131,6 +155,28 @@ export const ChatService = {
     ChatService.saveMessages(scope, next);
 
     return nextMessage;
+  },
+
+  updateMessage: (scope = "public", messageId, patch) => {
+    const current = ChatService.getMessages(scope);
+    const next = current.map((message) =>
+      message.id === messageId ? { ...message, ...patch } : message,
+    );
+
+    ChatService.saveMessages(scope, next);
+    return next.find((message) => message.id === messageId) || null;
+  },
+
+  sendWebMessage: async ({ scope = "staff", message, role = "ADMIN", clientId }) => {
+    const sessionToken = getOrCreateSessionToken(scope);
+    const response = await axiosClient.post("/chat/web", {
+      sessionToken,
+      clientId,
+      message,
+      role,
+    });
+
+    return response.data?.data ?? response.data ?? null;
   },
 
   getAssistantReply: (scope = "public", text) => {
