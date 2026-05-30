@@ -105,6 +105,7 @@ export const WaitersPage = () => {
   const [editingWaiterId, setEditingWaiterId] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
+    phone_number: "",
   });
 
   const fetchWaiters = async () => {
@@ -168,13 +169,13 @@ export const WaitersPage = () => {
 
   const openCreateModal = () => {
     setEditingWaiterId(null);
-    setFormData({ name: "" });
+    setFormData({ name: "", phone_number: "" });
     setIsModalOpen(true);
   };
 
   const openEditModal = (waiter) => {
     setEditingWaiterId(waiter.id);
-    setFormData({ name: waiter.name || "" });
+    setFormData({ name: waiter.name || "", phone_number: waiter.phone_number || "" });
     setIsModalOpen(true);
   };
 
@@ -189,9 +190,9 @@ export const WaitersPage = () => {
 
     try {
       if (editingWaiterId) {
-        await WaiterService.update(editingWaiterId, { name: formData.name.trim() });
+        await WaiterService.update(editingWaiterId, { name: formData.name.trim(), phone_number: formData.phone_number?.trim() });
       } else {
-        await WaiterService.create({ name: formData.name.trim() });
+        await WaiterService.create({ name: formData.name.trim(), phone_number: formData.phone_number?.trim() });
       }
 
       closeModal();
@@ -318,7 +319,13 @@ export const WaitersPage = () => {
                             {waiter.name}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            ID #{waiter.id}
+                            ID #{waiter.id} · {waiter.phone_number ? (
+                              <a href={`https://wa.me/${waiter.phone_number.replace(/[^0-9]/g,"")}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                                WhatsApp
+                              </a>
+                            ) : (
+                              "Sin número"
+                            )}
                           </p>
                         </div>
                       </div>
@@ -423,6 +430,20 @@ export const WaitersPage = () => {
                   onChange={handleInputChange}
                   className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary"
                   required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                  Teléfono (WhatsApp)
+                </label>
+                <input
+                  type="tel"
+                  name="phone_number"
+                  value={formData.phone_number}
+                  onChange={handleInputChange}
+                  placeholder="Ej: +51987654321"
+                  className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
 
