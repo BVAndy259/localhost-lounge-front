@@ -12,7 +12,7 @@ const getStoredToken = () => {
 };
 
 const axiosClient = axios.create({
-  baseURL: "http://localhost:3000/api",
+  baseURL: "https://localhost-lounge-api.onrender.com/api",
   headers: {
     "Content-Type": "application/json",
     "Cache-Control": "no-cache",
