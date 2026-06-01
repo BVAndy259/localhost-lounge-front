@@ -1,66 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Bot, User, LayoutDashboard, Table2, Users, ReceiptText, Sparkles } from "lucide-react";
+import { Send, Bot, User, LayoutDashboard, Table2, Users, ReceiptText, Sparkles, UtensilsCrossed } from "lucide-react";
 import axiosClient from "../../api/axiosClient";
 import { ChatService } from "../../services/chat.service";
 import { ReservationService } from "../../services/reservation.service";
-import { TableService } from "../../services/table.service";
 
 const ACTION_REQUIRES_CONFIRMATION = new Set([
-  "CREATE_RESERVATION",
+  "CREATE_WAITER",
+  "CREATE_TABLE",
+  "CREATE_PLATE",
 ]);
 
-const CREATE_ACTIONS = new Set(["CREATE_WAITER", "CREATE_TABLE", "CREATE_PLATE", "CREATE_RESERVATION"]);
+const CREATE_ACTIONS = new Set(["CREATE_WAITER", "CREATE_TABLE", "CREATE_PLATE"]);
 
 const ACTION_LABELS = {
   SHOW_DASHBOARD: "Abrir dashboard",
   RENDER_TABLE_STATUS: "Ver mesas",
   FIND_RESERVATION: "Buscar reserva",
   NAVIGATE_PAGE: "Abrir sección",
-  CREATE_RESERVATION: "Crear reserva",
   SHOW_RESERVATIONS: "Ver reservas",
   SHOW_ORDERS: "Ver órdenes",
   SHOW_WAITERS: "Ver meseros",
+  CREATE_WAITER: "Crear mesero",
   CREATE_PLATE: "Crear plato",
   UPDATE_PLATE: "Actualizar plato",
   CREATE_TABLE: "Crear mesa",
   UPDATE_TABLE: "Actualizar mesa",
   MANAGE_USERS: "Gestionar usuarios",
-};
-
-const buildReservationRequest = async (payload) => {
-  const tablesResponse = await TableService.getAll();
-  const tables = tablesResponse.data || [];
-
-  const resolvedTableId =
-    payload.table_id ||
-    tables.find((table) => String(table.table_number) === String(payload.table_number))?.id ||
-    null;
-
-  if (!resolvedTableId) {
-    throw new Error("No pude identificar la mesa para crear la reserva.");
-  }
-
-  const request = {
-    table_id: Number(resolvedTableId),
-    reservation_date: payload.reservation_date,
-    reservation_time: payload.reservation_time,
-    number_people: Number(payload.number_people || payload.people || 0),
-    notes: payload.notes?.trim() || "",
-  };
-
-  if (payload.client_id) {
-    return { ...request, client_id: Number(payload.client_id) };
-  }
-
-  if (payload.client_data) {
-    return { ...request, client_data: payload.client_data };
-  }
-
-  if (payload.client) {
-    return { ...request, client_data: payload.client };
-  }
-
-  throw new Error("La IA no entregó los datos del cliente para crear la reserva.");
 };
 
 export const InternalChatPage = () => {
@@ -161,6 +126,13 @@ export const InternalChatPage = () => {
           payload: response?.payload?.waiters || [],
           reply: response?.reply,
         });
+      } else if (response?.action === "SHOW_MENU") {
+        setActionView({
+          kind: "menu",
+          title: "Carta / Platos",
+          payload: response?.payload?.plates || [],
+          reply: response?.reply,
+        });
       } else if (response?.action === "FIND_RESERVATION") {
         const searchTerm = String(response?.payload?.search_term || prompt).trim().toLowerCase();
         const reservationsResponse = await ReservationService.getAll();
@@ -220,50 +192,90 @@ export const InternalChatPage = () => {
     try {
       ChatService.updateMessage("staff", message.id, { actionStatus: "confirmed" });
 
-      if (message.action === "CREATE_RESERVATION") {
-        const request = await buildReservationRequest(message.payload || {});
-        const result = await ReservationService.create(request);
+      let followUpAction = null;
+
+      if (message.action === "CREATE_WAITER") {
+        const created = message.payload?.waiter || message.payload || {};
         ChatService.addMessage("staff", {
           sender: "Asistente Operativo IA",
           role: "BOT",
-          text: "Reserva creada correctamente.",
-          action: "CREATE_RESERVATION",
-          payload: result?.data || request,
+          text: `Mesero ${created.name || ""} creado exitosamente.`,
+          action: "CREATE_WAITER",
+          payload: created,
         });
-        setActionView({
-          kind: "create-result",
-          title: "Reserva creada",
-          action: "CREATE_RESERVATION",
-          payload: result?.data || request,
-          reply: "Reserva creada correctamente.",
-        });
-      } else if (message.action === "CREATE_WAITER") {
-        const result = await axiosClient.post("/waiters", message.payload);
         setActionView({
           kind: "create-result",
           title: "Mesero creado",
           action: "CREATE_WAITER",
-          payload: result?.data?.data || result?.data || message.payload,
+          payload: created,
           reply: "Mesero creado correctamente.",
         });
+        followUpAction = "SHOW_WAITERS";
       } else if (message.action === "CREATE_TABLE") {
-        const result = await axiosClient.post("/tables", message.payload);
+        const created = message.payload?.table || message.payload || {};
+        ChatService.addMessage("staff", {
+          sender: "Asistente Operativo IA",
+          role: "BOT",
+          text: `Mesa ${created.table_number || ""} registrada correctamente.`,
+          action: "CREATE_TABLE",
+          payload: created,
+        });
         setActionView({
           kind: "create-result",
           title: "Mesa creada",
           action: "CREATE_TABLE",
-          payload: result?.data?.data || result?.data || message.payload,
+          payload: created,
           reply: "Mesa creada correctamente.",
         });
+        followUpAction = "RENDER_TABLE_STATUS";
       } else if (message.action === "CREATE_PLATE") {
-        const result = await axiosClient.post("/plates", message.payload);
+        const created = message.payload?.plate || message.payload || {};
+        ChatService.addMessage("staff", {
+          sender: "Asistente Operativo IA",
+          role: "BOT",
+          text: `Plato "${created.name || ""}" añadido al menú.`,
+          action: "CREATE_PLATE",
+          payload: created,
+        });
         setActionView({
           kind: "create-result",
           title: "Plato creado",
           action: "CREATE_PLATE",
-          payload: result?.data?.data || result?.data || message.payload,
+          payload: created,
           reply: "Plato creado correctamente.",
         });
+        followUpAction = "SHOW_MENU";
+      }
+
+      if (followUpAction) {
+        const response = await ChatService.sendWebMessage({
+          scope: "staff",
+          message: `trigger ${followUpAction}`,
+          role: currentUser?.role || "ADMIN",
+        });
+        if (response) {
+          ChatService.addMessage("staff", {
+            sender: "Asistente Operativo IA",
+            role: "BOT",
+            text: response?.reply || "Datos actualizados.",
+            action: response?.action,
+            payload: response?.payload || {},
+          });
+          const actionHandlers = {
+            SHOW_WAITERS: "waiters",
+            RENDER_TABLE_STATUS: "tables",
+            SHOW_MENU: "menu",
+          };
+          const kind = actionHandlers[followUpAction];
+          if (kind) {
+            setActionView({
+              kind,
+              title: kind === "waiters" ? "Meseros" : kind === "tables" ? "Estado de mesas" : "Carta / Platos",
+              payload: response?.payload?.[kind === "waiters" ? "waiters" : kind === "tables" ? "tables" : "plates"] || [],
+              reply: response?.reply,
+            });
+          }
+        }
       }
     } catch (error) {
       console.error("Error al ejecutar acción IA:", error);
@@ -332,6 +344,7 @@ export const InternalChatPage = () => {
                 {actionView.kind === "tables" ? <Table2 size={16} className="text-primary" /> : null}
                 {actionView.kind === "reservations" || actionView.kind === "reservation-search" ? <ReceiptText size={16} className="text-primary" /> : null}
                 {actionView.kind === "waiters" ? <Users size={16} className="text-primary" /> : null}
+                {actionView.kind === "menu" ? <UtensilsCrossed size={16} className="text-primary" /> : null}
                 {actionView.kind === "orders" ? <ReceiptText size={16} className="text-primary" /> : null}
                 {actionView.kind === "create-result" ? <Sparkles size={16} className="text-primary" /> : null}
                 <h3 className="text-sm font-bold text-white">{actionView.title}</h3>
@@ -422,6 +435,21 @@ export const InternalChatPage = () => {
                       <p className="text-xs text-muted-foreground mt-1">{waiter.phone_number || "Sin teléfono"}</p>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {actionView.kind === "menu" && Array.isArray(actionView.payload) && (
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {actionView.payload.length > 0 ? actionView.payload.map((plate) => (
+                    <div key={plate.id} className="rounded-md border border-border bg-background/80 p-3 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-semibold text-white">{plate.name}</p>
+                        <span className="text-xs text-primary font-bold">S/. {Number(plate.price).toFixed(2)}</span>
+                      </div>
+                      <p className="text-muted-foreground mt-1">{plate.category}</p>
+                      {plate.description && <p className="text-xs text-muted-foreground mt-1">{plate.description}</p>}
+                    </div>
+                  )) : <p className="text-sm text-muted-foreground">No hay platos registrados.</p>}
                 </div>
               )}
 
