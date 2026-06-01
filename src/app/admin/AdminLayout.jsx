@@ -7,7 +7,6 @@ import {
   Armchair,
   UtensilsCrossed,
   LogOut,
-  MessageSquare,
   Users,
   ShieldAlert,
   ShieldCheck,
@@ -85,11 +84,6 @@ export const AdminLayout = () => {
       path: "/admin/platos",
       icon: <UtensilsCrossed size={18} />,
       adminOnly: true,
-    },
-    {
-      name: "Chat Interno",
-      path: "/admin/chat",
-      icon: <MessageSquare size={18} />,
     },
   ];
 

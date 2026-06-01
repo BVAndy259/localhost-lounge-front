@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthService } from "../../services/auth.service";
 import { CardWrapper } from "../../components/ui/CardWrapper";
@@ -8,6 +8,12 @@ export const LoginPage = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (AuthService.isAuthenticated()) {
+      navigate("/admin", { replace: true });
+    }
+  }, [navigate]);
 
   const handleChange = (e) => {
     setCredentials({ ...credentials, [e.target.name]: e.target.value });
@@ -20,7 +26,7 @@ export const LoginPage = () => {
 
     try {
       await AuthService.login(credentials.email, credentials.password);
-      navigate("/admin");
+      navigate("/admin", { replace: true });
     } catch (err) {
       setError(
         err.response?.data?.error ||

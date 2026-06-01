@@ -1,27 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Send, Bot, User, CheckCircle2, XCircle } from "lucide-react";
+import { Send, Bot, User, LayoutDashboard, Table2, Users, ReceiptText, Sparkles } from "lucide-react";
+import axiosClient from "../../api/axiosClient";
 import { ChatService } from "../../services/chat.service";
 import { ReservationService } from "../../services/reservation.service";
 import { TableService } from "../../services/table.service";
-import { AuthService } from "../../services/auth.service";
 
 const ACTION_REQUIRES_CONFIRMATION = new Set([
   "CREATE_RESERVATION",
 ]);
 
-const AUTO_ACTIONS = new Set([
-  "SHOW_DASHBOARD",
-  "RENDER_TABLE_STATUS",
-  "FIND_RESERVATION",
-  "NAVIGATE_PAGE",
-  "SHOW_RESERVATIONS",
-  "SHOW_ORDERS",
-  "SHOW_WAITERS",
-  "UPDATE_PLATE",
-  "UPDATE_TABLE",
-  "MANAGE_USERS",
-]);
+const CREATE_ACTIONS = new Set(["CREATE_WAITER", "CREATE_TABLE", "CREATE_PLATE", "CREATE_RESERVATION"]);
 
 const ACTION_LABELS = {
   SHOW_DASHBOARD: "Abrir dashboard",
@@ -37,73 +25,6 @@ const ACTION_LABELS = {
   CREATE_TABLE: "Crear mesa",
   UPDATE_TABLE: "Actualizar mesa",
   MANAGE_USERS: "Gestionar usuarios",
-};
-
-const getActionSummary = (message) => {
-  const payload = message?.payload || {};
-
-  switch (message?.action) {
-    case "SHOW_DASHBOARD":
-      return "Ir al panel principal del staff.";
-    case "RENDER_TABLE_STATUS":
-      return "Ir a la vista de mesas para ver ocupación y disponibilidad.";
-    case "FIND_RESERVATION":
-      return `Buscar reserva con: ${payload.search_term || "criterio no definido"}.`;
-    case "NAVIGATE_PAGE":
-      return `Abrir ${payload.label || payload.route || "sección solicitada"}.`;
-    case "CREATE_RESERVATION":
-      return `Crear una reserva para ${payload.number_people || payload.people || "?"} persona(s) en ${payload.reservation_date || "fecha pendiente"} ${payload.reservation_time || "hora pendiente"}.`;
-    case "SHOW_RESERVATIONS":
-      return "Ir al listado de reservas.";
-    case "SHOW_ORDERS":
-      return "Ir al listado de órdenes.";
-    case "SHOW_WAITERS":
-      return "Ir al listado de meseros.";
-    case "CREATE_PLATE":
-      return `Crear plato: ${payload.name || "sin nombre"}.`;
-    case "UPDATE_PLATE":
-      return `Actualizar plato ID: ${payload.id || "?"}.`;
-    case "CREATE_TABLE":
-      return `Crear mesa #${payload.table_number || "?"}.`;
-    case "UPDATE_TABLE":
-      return `Actualizar mesa ID: ${payload.id || "?"}.`;
-    case "MANAGE_USERS":
-      return "Ir a gestión de usuarios.";
-    default:
-      return "";
-  }
-};
-
-const getRouteFromAction = (message) => {
-  const payload = message?.payload || {};
-
-  switch (message?.action) {
-    case "SHOW_DASHBOARD":
-      return "/admin";
-    case "RENDER_TABLE_STATUS":
-    case "CREATE_TABLE":
-    case "UPDATE_TABLE":
-      return "/admin/mesas";
-    case "FIND_RESERVATION":
-      return `/admin/reservas?q=${encodeURIComponent(payload.search_term || "")}`;
-    case "NAVIGATE_PAGE":
-      return payload.route || "/admin";
-    case "SHOW_RESERVATIONS":
-    case "CREATE_RESERVATION":
-      return "/admin/reservas";
-    case "SHOW_ORDERS":
-      return "/admin/ordenes";
-    case "SHOW_WAITERS":
-    case "CREATE_WAITER":
-      return "/admin/meseros";
-    case "CREATE_PLATE":
-    case "UPDATE_PLATE":
-      return "/admin/platos";
-    case "MANAGE_USERS":
-      return "/admin/usuarios";
-    default:
-      return null;
-  }
 };
 
 const buildReservationRequest = async (payload) => {
@@ -143,10 +64,10 @@ const buildReservationRequest = async (payload) => {
 };
 
 export const InternalChatPage = () => {
-  const navigate = useNavigate();
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [executingActionId, setExecutingActionId] = useState(null);
+  const [actionView, setActionView] = useState(null);
   const messagesEndRef = useRef(null);
   const currentUser = useMemo(() => {
     try {
@@ -205,12 +126,80 @@ export const InternalChatPage = () => {
         requiresConfirmation,
       });
 
-      if (!requiresConfirmation && response?.action && AUTO_ACTIONS.has(response.action)) {
-        const route = getRouteFromAction({ action: response.action, payload: response.payload });
-        if (route) setTimeout(() => navigate(route), 600);
-      } else if (response?.action && response.action.startsWith("CREATE_")) {
-        const route = getRouteFromAction({ action: response.action, payload: response.payload });
-        if (route) setTimeout(() => navigate(route), 1500);
+      if (response?.action === "SHOW_DASHBOARD") {
+        setActionView({
+          kind: "dashboard",
+          title: "Reportes de hoy",
+          payload: response?.payload?.dashboard || null,
+          reply: response?.reply,
+        });
+      } else if (response?.action === "RENDER_TABLE_STATUS") {
+        setActionView({
+          kind: "tables",
+          title: "Estado de mesas",
+          payload: response?.payload?.tables || [],
+          reply: response?.reply,
+        });
+      } else if (response?.action === "SHOW_RESERVATIONS") {
+        setActionView({
+          kind: "reservations",
+          title: "Reservas recientes",
+          payload: response?.payload?.reservations || [],
+          reply: response?.reply,
+        });
+      } else if (response?.action === "SHOW_ORDERS") {
+        setActionView({
+          kind: "orders",
+          title: "Órdenes recientes",
+          payload: response?.payload?.orders || [],
+          reply: response?.reply,
+        });
+      } else if (response?.action === "SHOW_WAITERS") {
+        setActionView({
+          kind: "waiters",
+          title: "Meseros",
+          payload: response?.payload?.waiters || [],
+          reply: response?.reply,
+        });
+      } else if (response?.action === "FIND_RESERVATION") {
+        const searchTerm = String(response?.payload?.search_term || prompt).trim().toLowerCase();
+        const reservationsResponse = await ReservationService.getAll();
+        const reservations = reservationsResponse.data || [];
+        const filtered = reservations.filter((reservation) => {
+          const clientName = `${reservation.client?.name || ""} ${reservation.client?.last_name || ""}`.toLowerCase();
+          const phone = String(reservation.client?.phone_number || "").toLowerCase();
+          const email = String(reservation.client?.email || "").toLowerCase();
+          const tableNumber = String(reservation.table?.table_number || reservation.table_id || "").toLowerCase();
+          const status = String(reservation.status || "").toLowerCase();
+          return [clientName, phone, email, tableNumber, status, String(reservation.id || "")].some((value) =>
+            value.includes(searchTerm),
+          );
+        });
+
+        setActionView({
+          kind: "reservation-search",
+          title: `Búsqueda: ${searchTerm || "reservas"}`,
+          payload: filtered,
+          reply: response?.reply,
+        });
+      } else if (CREATE_ACTIONS.has(response?.action)) {
+        setActionView({
+          kind: "create",
+          title: ACTION_LABELS[response.action] || "Creación",
+          action: response?.action,
+          payload: response?.payload || {},
+          reply: response?.reply,
+          requiresConfirmation,
+        });
+      } else if (response?.action === "NAVIGATE_PAGE") {
+        setActionView({
+          kind: "route",
+          title: "Sección solicitada",
+          payload: response?.payload || {},
+          reply: response?.reply,
+        });
+      } else {
+        setActionView(null);
       }
     } catch (error) {
       const fallbackReply = ChatService.getAssistantReply("staff", prompt);
@@ -241,7 +230,40 @@ export const InternalChatPage = () => {
           action: "CREATE_RESERVATION",
           payload: result?.data || request,
         });
-        setTimeout(() => navigate("/admin/reservas"), 1500);
+        setActionView({
+          kind: "create-result",
+          title: "Reserva creada",
+          action: "CREATE_RESERVATION",
+          payload: result?.data || request,
+          reply: "Reserva creada correctamente.",
+        });
+      } else if (message.action === "CREATE_WAITER") {
+        const result = await axiosClient.post("/waiters", message.payload);
+        setActionView({
+          kind: "create-result",
+          title: "Mesero creado",
+          action: "CREATE_WAITER",
+          payload: result?.data?.data || result?.data || message.payload,
+          reply: "Mesero creado correctamente.",
+        });
+      } else if (message.action === "CREATE_TABLE") {
+        const result = await axiosClient.post("/tables", message.payload);
+        setActionView({
+          kind: "create-result",
+          title: "Mesa creada",
+          action: "CREATE_TABLE",
+          payload: result?.data?.data || result?.data || message.payload,
+          reply: "Mesa creada correctamente.",
+        });
+      } else if (message.action === "CREATE_PLATE") {
+        const result = await axiosClient.post("/plates", message.payload);
+        setActionView({
+          kind: "create-result",
+          title: "Plato creado",
+          action: "CREATE_PLATE",
+          payload: result?.data?.data || result?.data || message.payload,
+          reply: "Plato creado correctamente.",
+        });
       }
     } catch (error) {
       console.error("Error al ejecutar acción IA:", error);
@@ -302,6 +324,114 @@ export const InternalChatPage = () => {
                     <span
                       className={`font-bold ${msg.role === "BOT" ? "text-primary" : "text-white"}`}
                     >
+
+          {actionView && (
+            <div className="border-t border-border bg-card/90 p-5 shrink-0">
+              <div className="flex items-center gap-2 mb-3">
+                {actionView.kind === "dashboard" ? <LayoutDashboard size={16} className="text-primary" /> : null}
+                {actionView.kind === "tables" ? <Table2 size={16} className="text-primary" /> : null}
+                {actionView.kind === "reservations" || actionView.kind === "reservation-search" ? <ReceiptText size={16} className="text-primary" /> : null}
+                {actionView.kind === "waiters" ? <Users size={16} className="text-primary" /> : null}
+                {actionView.kind === "orders" ? <ReceiptText size={16} className="text-primary" /> : null}
+                {actionView.kind === "create-result" ? <Sparkles size={16} className="text-primary" /> : null}
+                <h3 className="text-sm font-bold text-white">{actionView.title}</h3>
+              </div>
+
+              {actionView.reply && (
+                <p className="text-sm text-muted-foreground mb-4">{actionView.reply}</p>
+              )}
+
+              {actionView.kind === "dashboard" && actionView.payload && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="rounded-md border border-border bg-background/80 p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Mesas totales</p>
+                    <p className="text-2xl font-bold text-white">{actionView.payload.tables?.total ?? 0}</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background/80 p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Mesas libres</p>
+                    <p className="text-2xl font-bold text-white">{actionView.payload.tables?.libres ?? 0}</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background/80 p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Mesas ocupadas</p>
+                    <p className="text-2xl font-bold text-white">{actionView.payload.tables?.ocupadas ?? 0}</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background/80 p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Reservas hoy</p>
+                    <p className="text-2xl font-bold text-white">{actionView.payload.reservations?.today_total ?? 0}</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background/80 p-3 md:col-span-2">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Reservas pendientes</p>
+                    <p className="text-2xl font-bold text-white">{actionView.payload.reservations?.pending ?? 0}</p>
+                  </div>
+                </div>
+              )}
+
+              {actionView.kind === "tables" && Array.isArray(actionView.payload) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto pr-1">
+                  {actionView.payload.map((table) => (
+                    <div key={table.id} className="rounded-md border border-border bg-background/80 p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold text-white">Mesa {table.table_number}</p>
+                        <span className="text-xs text-primary font-bold">{table.status}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{table.type} · {table.capacity} pax</p>
+                      <p className="text-xs text-muted-foreground mt-1">Mesero: {table.waiter?.name || "Sin asignar"}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {actionView.kind === "reservations" || actionView.kind === "reservation-search" ? (
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {Array.isArray(actionView.payload) && actionView.payload.length > 0 ? (
+                    actionView.payload.map((reservation) => (
+                      <div key={reservation.id} className="rounded-md border border-border bg-background/80 p-3 text-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-semibold text-white">Reserva #{reservation.id}</p>
+                          <span className="text-xs text-primary font-bold">{reservation.status}</span>
+                        </div>
+                        <p className="text-muted-foreground mt-1">{reservation.client?.name} {reservation.client?.last_name}</p>
+                        <p className="text-muted-foreground">Mesa {reservation.table?.table_number || reservation.table_id} · {reservation.reservation_date} {reservation.reservation_time}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No hay resultados para esta consulta.</p>
+                  )}
+                </div>
+              ) : null}
+
+              {actionView.kind === "orders" && Array.isArray(actionView.payload) && (
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {actionView.payload.length > 0 ? actionView.payload.map((order) => (
+                    <div key={order.id} className="rounded-md border border-border bg-background/80 p-3 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-semibold text-white">Orden #{order.id}</p>
+                        <span className="text-xs text-primary font-bold">{order.status}</span>
+                      </div>
+                      <p className="text-muted-foreground mt-1">Mesa {order.table?.table_number || order.table_id}</p>
+                    </div>
+                  )) : <p className="text-sm text-muted-foreground">No hay órdenes registradas.</p>}
+                </div>
+              )}
+
+              {actionView.kind === "waiters" && Array.isArray(actionView.payload) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto pr-1">
+                  {actionView.payload.map((waiter) => (
+                    <div key={waiter.id} className="rounded-md border border-border bg-background/80 p-3">
+                      <p className="font-semibold text-white">{waiter.name}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{waiter.phone_number || "Sin teléfono"}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {actionView.kind === "create-result" && actionView.payload && (
+                <pre className="max-h-56 overflow-auto rounded-md border border-border bg-background/80 p-3 text-xs text-zinc-300 whitespace-pre-wrap">
+                  {JSON.stringify(actionView.payload, null, 2)}
+                </pre>
+              )}
+            </div>
+          )}
                       {msg.sender}
                     </span>
                     <span className="text-xs text-muted-foreground">
@@ -311,47 +441,6 @@ export const InternalChatPage = () => {
                   <div className="text-sm text-zinc-300 leading-relaxed bg-secondary/30 inline-block px-3 py-2 rounded-md border border-border/50">
                     {msg.text}
                   </div>
-
-                  {msg.role === "BOT" && msg.action === "CREATE_RESERVATION" && msg.actionStatus !== "confirmed" && msg.actionStatus !== "cancelled" && (
-                    <div className="mt-3 w-full max-w-xl rounded-md border border-primary/20 bg-primary/5 p-4">
-                      <p className="text-xs uppercase tracking-[0.25em] text-primary font-semibold">
-                        Acción propuesta
-                      </p>
-                      <p className="mt-2 text-sm text-white font-medium">
-                        {ACTION_LABELS[msg.action] || msg.action}
-                      </p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {getActionSummary(msg)}
-                      </p>
-
-                      {msg.payload && Object.keys(msg.payload).length > 0 && (
-                        <pre className="mt-3 overflow-x-auto rounded-sm border border-border bg-background/80 p-3 text-xs text-zinc-300 whitespace-pre-wrap">
-                          {JSON.stringify(msg.payload, null, 2)}
-                        </pre>
-                      )}
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleConfirmAction(msg)}
-                          disabled={executingActionId === msg.id}
-                          className="inline-flex items-center gap-2 rounded-sm bg-primary px-3 py-2 text-xs font-semibold uppercase tracking-wider text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-                        >
-                          <CheckCircle2 size={14} />
-                          {executingActionId === msg.id ? "Ejecutando..." : "Confirmar"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCancelAction(msg)}
-                          className="inline-flex items-center gap-2 rounded-sm border border-border bg-secondary/60 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-white"
-                        >
-                          <XCircle size={14} />
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
 
                 </div>
               </div>

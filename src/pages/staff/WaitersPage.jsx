@@ -189,10 +189,19 @@ export const WaitersPage = () => {
     setIsSubmitting(true);
 
     try {
+      const payload = {
+        name: formData.name.trim(),
+      };
+
+      const phoneNumber = formData.phone_number?.trim();
+      if (phoneNumber) {
+        payload.phone_number = phoneNumber;
+      }
+
       if (editingWaiterId) {
-        await WaiterService.update(editingWaiterId, { name: formData.name.trim(), phone_number: formData.phone_number?.trim() });
+        await WaiterService.update(editingWaiterId, payload);
       } else {
-        await WaiterService.create({ name: formData.name.trim(), phone_number: formData.phone_number?.trim() });
+        await WaiterService.create(payload);
       }
 
       closeModal();

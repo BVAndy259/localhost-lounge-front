@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 import { PublicLayout } from "../components/public/PublicLayout";
 import { HomePage } from "../pages/public/HomePage";
@@ -61,7 +62,64 @@ const StaffOnly = ({ children }) => {
   return children;
 };
 
+const routeMeta = [
+  { path: "/", title: "LocalHost Lounge | Inicio", icon: "/favicon.svg" },
+  { path: "/nosotros", title: "LocalHost Lounge | Nosotros", icon: "/favicon.svg" },
+  { path: "/comunidad", title: "LocalHost Lounge | Comunidad", icon: "/favicon.svg" },
+  { path: "/carta", title: "LocalHost Lounge | Carta", icon: "/favicon.svg" },
+  { path: "/restaurante", title: "LocalHost Lounge | Restaurante", icon: "/favicon.svg" },
+  { path: "/reservar", title: "LocalHost Lounge | Reservar", icon: "/favicon.svg" },
+  { path: "/admin/login", title: "LocalHost Lounge | Acceso Administrativo", icon: "/favicon.svg" },
+  { path: "/admin", title: "LocalHost Lounge | Panel Administrativo", icon: "/favicon.svg" },
+  { path: "/admin/mesas", title: "LocalHost Lounge | Mesas", icon: "/favicon.svg" },
+  { path: "/admin/reservas", title: "LocalHost Lounge | Reservas", icon: "/favicon.svg" },
+  { path: "/admin/ordenes", title: "LocalHost Lounge | Órdenes", icon: "/favicon.svg" },
+  { path: "/admin/meseros", title: "LocalHost Lounge | Meseros", icon: "/favicon.svg" },
+  { path: "/admin/usuarios", title: "LocalHost Lounge | Usuarios", icon: "/favicon.svg" },
+  { path: "/admin/platos", title: "LocalHost Lounge | Carta Administrativa", icon: "/favicon.svg" },
+  { path: "/admin/chat", title: "LocalHost Lounge | Asistente Interno", icon: "/favicon.svg" },
+  { path: "/admin/mesas/:tableId/pos", title: "LocalHost Lounge | POS de Mesa", icon: "/favicon.svg" },
+];
+
+const applyDocumentMeta = (pathname) => {
+  const isAdminRoute = pathname.startsWith("/admin");
+  const matchingRoute = routeMeta.find((entry) => {
+    if (entry.path === "/admin/mesas/:tableId/pos") {
+      return pathname.startsWith("/admin/mesas/") && pathname.endsWith("/pos");
+    }
+
+    return pathname === entry.path;
+  });
+
+  const fallbackTitle = isAdminRoute
+    ? "LocalHost Lounge | Panel Administrativo"
+    : "LocalHost Lounge";
+  const fallbackIcon = "/favicon.svg";
+
+  document.title = matchingRoute?.title || fallbackTitle;
+
+  const iconHref = matchingRoute?.icon || fallbackIcon;
+  const links = document.querySelectorAll('link[rel="icon"]');
+  if (links.length > 0) {
+    links.forEach((link) => {
+      link.setAttribute("href", iconHref);
+    });
+  } else {
+    const link = document.createElement("link");
+    link.rel = "icon";
+    link.type = "image/svg+xml";
+    link.href = iconHref;
+    document.head.appendChild(link);
+  }
+};
+
 export const AppRouter = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    applyDocumentMeta(location.pathname);
+  }, [location.pathname]);
+
   return (
     <Routes>
       <Route element={<PublicLayout />}>

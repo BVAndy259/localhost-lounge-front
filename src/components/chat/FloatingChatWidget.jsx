@@ -14,7 +14,11 @@ import { ReservationService } from "../../services/reservation.service";
 import { TableService } from "../../services/table.service";
 
 const ACTION_REQUIRES_CONFIRMATION = new Set([
-  "CREATE_RESERVATION", // Quitamos la de cliente de aquí porque ahora redirigimos
+  "CREATE_RESERVATION",
+  "CREATE_PUBLIC_RESERVATION",
+  "CREATE_WAITER",
+  "CREATE_TABLE",
+  "CREATE_PLATE",
 ]);
 
 const AUTO_ACTIONS = new Set([
@@ -26,7 +30,7 @@ const AUTO_ACTIONS = new Set([
   "SHOW_ORDERS",
   "SHOW_WAITERS",
   "MANAGE_USERS",
-  "PREFILL_RESERVATION", // <--- NUEVA ACCIÓN AUTOMÁTICA
+  "PREFILL_RESERVATION",
 ]);
 
 const getRouteFromAction = (action, payload) => {
@@ -52,30 +56,6 @@ const getRouteFromAction = (action, payload) => {
   }
 };
 
-const resolveTableChoice = (text, tables = []) => {
-  const normalizedText = text.trim().toLowerCase();
-  const numberMatch = normalizedText.match(/(?:mesa\s*)?(\d+)/i);
-
-  const exactChoice = tables.find((table) => {
-    const tableNumber = String(table.table_number).toLowerCase();
-    const tableId = String(table.id).toLowerCase();
-    return normalizedText === tableNumber || normalizedText === tableId;
-  });
-
-  if (exactChoice) return exactChoice;
-
-  if (numberMatch) {
-    const choiceNumber = numberMatch[1];
-    return (
-      tables.find((table) => String(table.table_number) === choiceNumber) ||
-      tables.find((table) => String(table.id) === choiceNumber) ||
-      null
-    );
-  }
-
-  return null;
-};
-
 export const FloatingChatWidget = ({ variant = "public", userRole }) => {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
@@ -84,7 +64,6 @@ export const FloatingChatWidget = ({ variant = "public", userRole }) => {
   const messagesEndRef = useRef(null);
   const [sessionToken, setSessionToken] = useState("");
   const [executingActionId, setExecutingActionId] = useState(null);
-  const [pendingReservation, setPendingReservation] = useState(null);
 
   const initialText =
     variant === "staff"
@@ -124,51 +103,6 @@ export const FloatingChatWidget = ({ variant = "public", userRole }) => {
     e.preventDefault();
     if (!inputValue.trim() || isTyping) return;
 
-    if (pendingReservation?.available_tables?.length) {
-      const selectedTable = resolveTableChoice(
-        inputValue,
-        pendingReservation.available_tables,
-      );
-
-      if (selectedTable) {
-        const reservationData = {
-          ...pendingReservation,
-          table_id: selectedTable.id,
-          table_number: selectedTable.table_number,
-          table_type: selectedTable.type,
-          table_capacity: selectedTable.capacity,
-        };
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: Date.now(),
-            sender: "user",
-            text: inputValue,
-            time: new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          },
-          {
-            id: Date.now() + 1,
-            sender: "bot",
-            text: `Mesa ${selectedTable.table_number} elegida. Te llevo al formulario para que confirmes la reserva.`,
-            time: new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          },
-        ]);
-
-        setInputValue("");
-        setPendingReservation(null);
-        setIsOpen(false);
-        setTimeout(() => navigate("/reservar", { state: { aiData: reservationData } }), 600);
-        return;
-      }
-    }
-
     const userMessage = {
       id: Date.now(),
       sender: "user",
@@ -185,7 +119,6 @@ export const FloatingChatWidget = ({ variant = "public", userRole }) => {
 
     try {
       const role = variant === "staff" ? userRole || "ADMIN" : "CLIENTE";
-
       const response = await axiosClient.post("/chat/web", {
         sessionToken: variant === "public" ? sessionToken : "staff-session",
         message: userMessage.text,
@@ -209,9 +142,7 @@ export const FloatingChatWidget = ({ variant = "public", userRole }) => {
 
       setMessages((prev) => [...prev, botMessage]);
 
-      if (data?.action === "PREFILL_RESERVATION" && data?.payload?.available_tables?.length) {
-        setPendingReservation(data.payload);
-      } else if (data?.action === "PREFILL_RESERVATION") {
+      if (data?.action === "PREFILL_RESERVATION") {
         setIsOpen(false);
         setTimeout(
           () => navigate("/reservar", { state: { aiData: data.payload } }),
@@ -219,9 +150,7 @@ export const FloatingChatWidget = ({ variant = "public", userRole }) => {
         );
       } else if (data?.action && AUTO_ACTIONS.has(data.action)) {
         const route = getRouteFromAction(data.action, data.payload);
-        if (route) {
-          setTimeout(() => navigate(route), 600);
-        }
+        if (route) setTimeout(() => navigate(route), 600);
       }
     } catch {
       setMessages((prev) => [
@@ -250,8 +179,20 @@ export const FloatingChatWidget = ({ variant = "public", userRole }) => {
     );
 
     try {
-      // Lógica solo para el Staff ahora
-      if (msg.action === "CREATE_RESERVATION") {
+      let successText = "Acción ejecutada correctamente.";
+
+      if (msg.action === "CREATE_WAITER") {
+        const createdWaiter = msg.payload?.waiter || msg.payload || {};
+        successText = `Mesero ${createdWaiter.name || ""} creado exitosamente.`.trim();
+      } else if (msg.action === "CREATE_TABLE") {
+        const createdTable = msg.payload?.table || msg.payload || {};
+        successText = `Mesa ${createdTable.table_number || ""} registrada correctamente.`.trim();
+      } else if (msg.action === "CREATE_PLATE") {
+        const createdPlate = msg.payload?.plate || msg.payload || {};
+        successText = `Plato "${createdPlate.name || ""}" añadido al menú.`.trim();
+      }
+      // Bloque anterior de reservaciones
+      else if (msg.action === "CREATE_RESERVATION") {
         const tablesRes = await TableService.getAll();
         const tables = tablesRes.data || [];
         const resolvedTableId =
@@ -260,7 +201,6 @@ export const FloatingChatWidget = ({ variant = "public", userRole }) => {
             (t) => String(t.table_number) === String(msg.payload.table_number),
           )?.id ||
           1;
-
         await ReservationService.create({
           table_id: Number(resolvedTableId),
           reservation_date: msg.payload.reservation_date,
@@ -269,21 +209,22 @@ export const FloatingChatWidget = ({ variant = "public", userRole }) => {
           notes: msg.payload.notes || "",
           client_data: msg.payload.client_data,
         });
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: Date.now(),
-            sender: "bot",
-            text: "Reserva de staff creada correctamente.",
-            time: new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          },
-        ]);
+        successText = "Reserva de staff creada correctamente.";
         setTimeout(() => navigate("/admin/reservas"), 1500);
       }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          sender: "bot",
+          text: successText,
+          time: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        },
+      ]);
     } catch (error) {
       setMessages((prev) => [
         ...prev,
@@ -327,7 +268,10 @@ export const FloatingChatWidget = ({ variant = "public", userRole }) => {
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
       {isOpen && (
-        <div className="bg-card border border-border w-80 sm:w-96 rounded-md shadow-2xl mb-4 overflow-hidden flex flex-col h-112.5 animate-in slide-in-from-bottom-5 duration-300">
+        <div
+          className="bg-card border border-border w-80 sm:w-96 rounded-md shadow-2xl mb-4 overflow-hidden flex flex-col animate-in slide-in-from-bottom-5 duration-300"
+          style={{ height: '450px' }}
+        >
           <div className="bg-secondary/50 border-b border-border p-4 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center border border-primary/30">
@@ -389,69 +333,6 @@ export const FloatingChatWidget = ({ variant = "public", userRole }) => {
                   </div>
                 </div>
 
-                {msg.sender === "bot" && msg.payload?.available_tables?.length ? (
-                  <div className="ml-9 mt-3 grid grid-cols-1 gap-2">
-                    {msg.payload.available_tables.map((table) => (
-                      <button
-                        key={table.id}
-                        type="button"
-                        onClick={() => {
-                          if (!pendingReservation) return;
-                          const reservationData = {
-                            ...pendingReservation,
-                            table_id: table.id,
-                            table_number: table.table_number,
-                            table_type: table.type,
-                            table_capacity: table.capacity,
-                          };
-
-                          setMessages((prev) => [
-                            ...prev,
-                            {
-                              id: Date.now(),
-                              sender: "user",
-                              text: `Mesa ${table.table_number}`,
-                              time: new Date().toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }),
-                            },
-                            {
-                              id: Date.now() + 1,
-                              sender: "bot",
-                              text: `Mesa ${table.table_number} elegida. Te llevo al formulario para que confirmes la reserva.`,
-                              time: new Date().toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }),
-                            },
-                          ]);
-
-                          setPendingReservation(null);
-                          setIsOpen(false);
-                          setTimeout(
-                            () => navigate("/reservar", { state: { aiData: reservationData } }),
-                            600,
-                          );
-                        }}
-                        className="text-left rounded-md border border-border bg-background/90 px-3 py-2 transition-colors hover:border-primary hover:bg-primary/10"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-semibold text-white">
-                              Mesa {table.table_number}
-                            </div>
-                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                              {table.type} · {table.capacity} pax
-                            </div>
-                          </div>
-                          <span className="text-xs font-bold text-primary">Elegir</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-
                 {msg.sender === "bot" &&
                   msg.action &&
                   ACTION_REQUIRES_CONFIRMATION.has(msg.action) &&
@@ -502,7 +383,7 @@ export const FloatingChatWidget = ({ variant = "public", userRole }) => {
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Escribe tu consulta..."
+              placeholder="Escribe tu comando..."
               disabled={isTyping}
               className="flex-1 bg-secondary/50 border border-border text-white text-sm rounded-sm px-3 py-2 focus:outline-none focus:border-primary transition-colors disabled:opacity-50"
             />
