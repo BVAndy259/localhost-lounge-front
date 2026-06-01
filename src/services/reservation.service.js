@@ -1,0 +1,30 @@
+import axiosClient from "../api/axiosClient";
+
+export const ReservationService = {
+  getAll: async () => {
+    try {
+      const response = await axiosClient.get("/reservations");
+      return {
+        ...response,
+        data: response.data?.data ?? response.data ?? [],
+      };
+    } catch (error) {
+      if (error?.response?.status === 401) {
+        return { data: [] };
+      }
+      throw error;
+    }
+  },
+  getById: (id) => axiosClient.get(`/reservations/${id}`),
+  create: (data) => axiosClient.post("/reservations", data),
+  createPublic: (data) => axiosClient.post("/reservations/public", data),
+  update: (id, data) => axiosClient.put(`/reservations/${id}`, data),
+  assignWaiter: (id, waiter_id) =>
+    axiosClient.patch(`/reservations/${id}/waiter`, { waiter_id }),
+  updateStatus: (id, status) =>
+    axiosClient.patch(`/reservations/${id}/status`, { status }),
+  getAvailableSlots: (date, guests) =>
+    axiosClient.get(
+      `/reservations/available-slots?date=${date}&guests=${guests}`,
+    ),
+};
