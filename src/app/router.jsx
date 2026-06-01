@@ -1,6 +1,13 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import { LandingPage } from "../pages/public/LandingPage";
+
+import { PublicLayout } from "../components/public/PublicLayout";
+import { HomePage } from "../pages/public/HomePage";
+import { AboutPage } from "../pages/public/AboutPage";
+import { EventsPage } from "../pages/public/EventsPage";
 import { ReservationPage } from "../pages/public/ReservationPage";
+import { MenuPage } from "../pages/public/MenuPage";
+import { RestaurantPage } from "../pages/public/RestaurantPage";
+
 import { LoginPage } from "../pages/staff/LoginPage";
 import { StaffDashboardPage } from "../pages/staff/DashboardPage";
 import { AdminLayout } from "./admin/AdminLayout";
@@ -12,6 +19,7 @@ import { ReservationsPage } from "../pages/staff/ReservationsPage";
 import { InternalChatPage } from "../pages/staff/InternalChatPage";
 import { POSPage } from "../pages/staff/POSPage";
 import { OrdersPage } from "../pages/staff/OrdersPage";
+
 import { AuthService } from "../services/auth.service";
 
 const getStoredUser = () => {
@@ -56,14 +64,25 @@ const StaffOnly = ({ children }) => {
 export const AppRouter = () => {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/reservar" element={<ReservationPage />} />
+      <Route element={<PublicLayout />}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/nosotros" element={<AboutPage />} />
+        <Route path="/comunidad" element={<EventsPage />} />
+        <Route path="/carta" element={<MenuPage />} />
+        <Route path="/restaurante" element={<RestaurantPage />} />
+        <Route path="/reservar" element={<ReservationPage />} />
+      </Route>
 
       <Route path="/admin/login" element={<LoginPage />} />
+
       <Route
         path="/admin"
         element={
-          hasValidSession() ? <AdminLayout /> : <Navigate to="/admin/login" replace />
+          hasValidSession() ? (
+            <AdminLayout />
+          ) : (
+            <Navigate to="/admin/login" replace />
+          )
         }
       >
         <Route index element={<StaffDashboardPage />} />

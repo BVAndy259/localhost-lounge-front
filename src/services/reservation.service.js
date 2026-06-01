@@ -23,10 +23,8 @@ export const ReservationService = {
     axiosClient.patch(`/reservations/${id}/waiter`, { waiter_id }),
   updateStatus: (id, status) =>
     axiosClient.patch(`/reservations/${id}/status`, { status }),
-  getAvailableSlots: async (date, guests) => {
-    const response = await axiosClient.get("/reservations/available-slots", {
-      params: { date, guests },
-    });
-    return response.data?.data ?? [];
-  },
+  getAvailableSlots: (date, guests) =>
+    axiosClient.get(
+      `/reservations/available-slots?date=${date}&guests=${guests}`,
+    ),
 };

@@ -212,7 +212,7 @@ export const TablesPage = () => {
             formData.reservation_price === null
               ? undefined
               : Number(formData.reservation_price),
-          description: formData.description,
+          description: formData.description.trim() || undefined,
         });
       } else {
         await TableService.create({

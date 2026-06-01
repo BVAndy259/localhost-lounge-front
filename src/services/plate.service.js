@@ -1,6 +1,14 @@
 import axiosClient from "../api/axiosClient";
 
 export const PlateService = {
+  getPublic: async () => {
+    const response = await axiosClient.get("/plates/public");
+    return {
+      ...response,
+      data: response.data?.data ?? response.data ?? [],
+    };
+  },
+
   getAll: async () => {
     const response = await axiosClient.get("/plates");
     return {

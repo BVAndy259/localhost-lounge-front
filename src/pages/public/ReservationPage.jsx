@@ -1,466 +1,588 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { ReservationService } from "../../services/reservation.service";
 import {
-  Terminal,
-  ChevronLeft,
-  ChevronRight,
   CheckCircle2,
+  ChevronRight,
+  ChevronLeft,
+  CalendarDays,
   Users,
-  Calendar,
   Clock,
   User,
   Phone,
-  MessageSquare,
-  ArrowLeft,
-  Table2,
+  AlignLeft,
+  Info,
+  Mail,
+  Armchair,
 } from "lucide-react";
 
-const STEPS = [
-  { key: "guests", label: "Personas", icon: Users },
-  { key: "date", label: "Fecha", icon: Calendar },
-  { key: "time", label: "Hora y Mesa", icon: Clock },
-  { key: "details", label: "Tus datos", icon: User },
-  { key: "confirm", label: "Confirmar", icon: CheckCircle2 },
-];
-
-const MIN_DATE = new Date().toISOString().split("T")[0];
-
 export const ReservationPage = () => {
-  const navigate = useNavigate();
-  const [step, setStep] = useState(0);
-  const [guests, setGuests] = useState(2);
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [selectedTable, setSelectedTable] = useState(null);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [notes, setNotes] = useState("");
-  const [availableSlots, setAvailableSlots] = useState([]);
-  const [loadingSlots, setLoadingSlots] = useState(false);
+  const location = useLocation();
+  const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState("");
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [availableSlots, setAvailableSlots] = useState([]);
 
-  const goNext = () => setStep((s) => Math.min(s + 1, STEPS.length - 1));
-  const goBack = () => {
-    setError("");
-    setStep((s) => Math.max(s - 1, 0));
-  };
+  const today = new Date().toISOString().split("T")[0];
 
-  const handleGuestsNext = () => {
-    if (guests < 1 || guests > 20) return;
-    goNext();
-  };
+  const [formData, setFormData] = useState({
+    guests: 2,
+    reservation_date: today,
+    reservation_time: "",
+    table_id: "",
+    selected_table_info: null,
+    customer_name: "",
+    customer_email: "",
+    customer_phone: "",
+    notes: "",
+  });
 
-  const handleDateNext = async () => {
-    if (!date) return;
-    setLoadingSlots(true);
-    setError("");
-    try {
-      const slots = await ReservationService.getAvailableSlots(date, guests);
-      setAvailableSlots(slots);
-      setTime("");
-      if (slots.length === 0) {
-        setError("No hay horarios disponibles para esa fecha. Intenta con otra fecha.");
+  // MAGIA DE LA IA: Intercepta los datos del chat y pre-llena el formulario
+  useEffect(() => {
+    let isActive = true;
+
+    const initializeAiReservation = async () => {
+      if (!location.state?.aiData) {
+        window.scrollTo(0, 0);
         return;
       }
-      goNext();
-    } catch (e) {
-      setError("Error al consultar horarios disponibles. Intenta de nuevo.");
+
+      const { aiData } = location.state;
+      const suggestedTable = aiData.table_id
+        ? {
+            id: aiData.table_id,
+            table_number: aiData.table_number || aiData.table_id,
+            type: aiData.table_type || "Automática",
+            capacity: aiData.table_capacity,
+          }
+        : null;
+
+      if (!isActive) return;
+
+      setFormData((prev) => ({
+        ...prev,
+        guests: aiData.number_people || 2,
+        reservation_date: aiData.reservation_date || today,
+        reservation_time: aiData.reservation_time || "",
+        customer_name: aiData.customer_name || "",
+        customer_email: aiData.customer_email || "",
+        customer_phone: aiData.customer_phone || "",
+        notes: "Reserva iniciada vía IA.",
+        table_id: aiData.table_id || "",
+        selected_table_info: suggestedTable,
+      }));
+
+      if (suggestedTable) {
+        setStep(3); // ¡Salta directo al paso 3 de confirmación!
+      } else {
+        setStep(2);
+        if (aiData.reservation_date && aiData.number_people) {
+          try {
+            const response = await ReservationService.getAvailableSlots(
+              aiData.reservation_date,
+              aiData.number_people,
+            );
+
+            if (isActive) {
+              setAvailableSlots(response.data?.data || []);
+            }
+          } catch {
+            if (isActive) {
+              setAvailableSlots([]);
+            }
+          }
+        }
+      }
+
+      window.history.replaceState({}, document.title); // Limpia el historial para evitar bucles
+    };
+
+    initializeAiReservation();
+
+    return () => {
+      isActive = false;
+    };
+  }, [location, today]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+  };
+
+  const handleSearchSlots = async (e) => {
+    e.preventDefault();
+    setIsLoadingSlots(true);
+    try {
+      const response = await ReservationService.getAvailableSlots(
+        formData.reservation_date,
+        formData.guests,
+      );
+      setAvailableSlots(response.data?.data || []);
+      setFormData({
+        ...formData,
+        reservation_time: "",
+        table_id: "",
+        selected_table_info: null,
+      });
+      setStep(2);
+    } catch {
+      alert("Error al buscar disponibilidad. Intente nuevamente.");
     } finally {
-      setLoadingSlots(false);
+      setIsLoadingSlots(false);
     }
   };
 
-  const handleTimeNext = () => {
-    if (!time || !selectedTable) return;
-    goNext();
+  const handleSelectTime = (time) => {
+    setFormData({
+      ...formData,
+      reservation_time: time,
+      table_id: "",
+      selected_table_info: null,
+    });
   };
 
-  const handleSelectTime = (slotTime) => {
-    setTime(slotTime);
-    const slot = availableSlots.find((s) => s.time === slotTime);
-    if (slot?.tables?.length > 0) {
-      setSelectedTable(slot.tables[0]);
-    } else {
-      setSelectedTable(null);
-    }
+  const handleSelectTable = (table) => {
+    setFormData({
+      ...formData,
+      table_id: table.id,
+      selected_table_info: table,
+    });
+    setStep(3);
   };
 
-  const handleDetailsNext = () => {
-    if (!name.trim() || !phone.trim()) return;
-    goNext();
-  };
-
-  const handleSubmit = async () => {
+  const handleSubmitReservation = async (e) => {
+    e.preventDefault();
     setIsSubmitting(true);
-    setError("");
     try {
       await ReservationService.createPublic({
-        reservation_date: date,
-        reservation_time: time,
-        number_people: guests,
-        customer_name: name.trim(),
-        customer_phone: phone.trim(),
-        notes: notes.trim() || undefined,
+        table_id: formData.table_id,
+        reservation_date: formData.reservation_date,
+        reservation_time: formData.reservation_time,
+        number_people: Number(formData.guests),
+        customer_name: formData.customer_name,
+        customer_email: formData.customer_email,
+        customer_phone: formData.customer_phone,
+        notes: formData.notes,
       });
-      setSuccess(true);
-    } catch (e) {
-      setError(e?.response?.data?.error || "Error al crear la reserva. Intenta de nuevo.");
+      setStep(4);
+    } catch (error) {
+      const errorMsg = 
+        error.response?.data?.error || "Error al procesar la reserva.";
+      alert(errorMsg);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (success) {
-    return (
-      <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/30 flex items-center justify-center px-6">
-        <div className="max-w-md w-full bg-card border border-border p-10 rounded-sm shadow-2xl text-center">
-          <CheckCircle2 size={64} className="text-emerald-500 mx-auto mb-6" />
-          <h2 className="text-2xl font-black text-white mb-3">¡Reserva Enviada!</h2>
-          <p className="text-muted-foreground text-sm mb-8">
-            Nuestro equipo verificará la disponibilidad y te confirmaremos pronto.
-          </p>
-          <button
-            onClick={() => navigate("/")}
-            className="bg-primary text-primary-foreground px-6 py-3 rounded-sm font-semibold hover:bg-primary/90 transition-colors"
+  const renderStepper = () => (
+    <div className="flex items-center justify-center gap-2 sm:gap-4 mb-12">
+      {[1, 2, 3].map((num) => (
+        <div key={num} className="flex items-center gap-2 sm:gap-4">
+          <div
+            className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold border transition-colors ${
+              step >= num
+                ? "bg-primary border-primary text-primary-foreground"
+                : "bg-transparent border-border text-muted-foreground"
+            }`}
           >
-            Volver al inicio
-          </button>
+            {step > num ? <CheckCircle2 size={16} /> : num}
+          </div>
+          {num < 3 && (
+            <div
+              className={`w-8 sm:w-16 h-px ${step > num ? "bg-primary" : "bg-border"}`}
+            ></div>
+          )}
         </div>
-      </div>
-    );
-  }
+      ))}
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/30">
-      <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b border-border">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <Terminal className="text-primary" size={24} />
-            <span className="text-xl font-black tracking-widest uppercase text-white">LocalHost</span>
-          </Link>
-          <Link
-            to="/"
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-white transition-colors"
-          >
-            <ArrowLeft size={16} />
-            Volver
-          </Link>
-        </div>
-      </nav>
-
-      <div className="pt-32 pb-20 px-6 max-w-lg mx-auto">
-        <div className="text-center mb-12">
-          <h1 className="text-3xl font-black text-white uppercase tracking-wider mb-2">
-            Reserva tu Mesa
+    <div className="min-h-[85vh] py-12 px-6 max-w-4xl mx-auto animate-in fade-in duration-500 flex flex-col justify-center">
+      {step < 4 && (
+        <div className="text-center mb-10">
+          <h1 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-wider mb-3">
+            Reserva tu Espacio
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Paso {step + 1} de {STEPS.length - 1}
+          <p className="text-muted-foreground">
+            Asegura tu mesa en nuestro servidor. El proceso tomará menos de un
+            minuto.
           </p>
         </div>
+      )}
 
-        <div className="flex items-center justify-center gap-2 mb-10">
-          {STEPS.slice(0, -1).map((s, i) => (
-            <div key={s.key} className="flex items-center gap-2">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                  i <= step
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-secondary text-muted-foreground border border-border"
-                }`}
-              >
-                <s.icon size={14} />
+      {step < 4 && renderStepper()}
+
+      <div className="bg-card border border-border p-6 sm:p-10 rounded-sm shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-32 bg-primary/5 rounded-full blur-[80px] -z-10 pointer-events-none"></div>
+
+        {/* --- PASO 1 --- */}
+        {step === 1 && (
+          <form
+            onSubmit={handleSearchSlots}
+            className="space-y-8 animate-in slide-in-from-right-8 duration-300"
+          >
+            <div>
+              <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                <Users className="text-primary" /> ¿Para cuántos compilamos la
+                mesa?
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    Número de Personas
+                  </label>
+                  <div className="relative">
+                    <Users
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      size={18}
+                    />
+                    <input
+                      type="number"
+                      name="guests"
+                      min="1"
+                      max="20"
+                      required
+                      value={formData.guests}
+                      onChange={handleInputChange}
+                      className="w-full bg-secondary/50 border border-border text-white text-lg rounded-sm pl-12 pr-4 py-4 focus:outline-none focus:border-primary transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    Fecha de Reserva
+                  </label>
+                  <div className="relative">
+                    <CalendarDays
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      size={18}
+                    />
+                    <input
+                      type="date"
+                      name="reservation_date"
+                      min={today}
+                      required
+                      value={formData.reservation_date}
+                      onChange={handleInputChange}
+                      className="w-full bg-secondary/50 border border-border text-white text-lg rounded-sm pl-12 pr-4 py-4 focus:outline-none focus:border-primary transition-colors scheme-dark"
+                    />
+                  </div>
+                </div>
               </div>
-              {i < STEPS.length - 2 && (
-                <div className={`w-6 h-px ${i < step ? "bg-primary" : "bg-border"}`} />
-              )}
             </div>
-          ))}
-        </div>
 
-        <div className="bg-card border border-border p-8 sm:p-10 rounded-sm shadow-2xl">
-          {error && (
-            <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded-sm text-sm text-red-400">
-              {error}
-            </div>
-          )}
+            <button
+              type="submit"
+              disabled={isLoadingSlots}
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-widest text-sm py-4 rounded-sm transition-all flex justify-center items-center gap-2 disabled:opacity-50"
+            >
+              {isLoadingSlots
+                ? "Consultando Servidor..."
+                : "Buscar Disponibilidad"}{" "}
+              <ChevronRight size={18} />
+            </button>
+          </form>
+        )}
 
-          {step === 0 && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <Users size={40} className="text-primary mx-auto mb-3" />
-                <h2 className="text-xl font-bold text-white mb-1">¿Cuántos serán?</h2>
-                <p className="text-sm text-muted-foreground">Selecciona la cantidad de personas</p>
-              </div>
-              <div className="flex items-center justify-center gap-4">
-                <button
-                  type="button"
-                  onClick={() => setGuests((g) => Math.max(1, g - 1))}
-                  className="w-12 h-12 rounded-full bg-secondary border border-border text-white text-xl font-bold hover:bg-secondary/80 transition-colors"
-                >
-                  -
-                </button>
-                <span className="text-5xl font-black text-white w-20 text-center">{guests}</span>
-                <button
-                  type="button"
-                  onClick={() => setGuests((g) => Math.min(20, g + 1))}
-                  className="w-12 h-12 rounded-full bg-secondary border border-border text-white text-xl font-bold hover:bg-secondary/80 transition-colors"
-                >
-                  +
-                </button>
-              </div>
-              <p className="text-center text-xs text-muted-foreground">
-                {guests === 1 ? "1 persona" : `${guests} personas`}
-              </p>
+        {/* --- PASO 2 --- */}
+        {step === 2 && (
+          <div className="animate-in slide-in-from-right-8 duration-300">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Clock className="text-primary" /> Horarios & Mesas
+              </h2>
               <button
-                onClick={handleGuestsNext}
-                className="w-full bg-primary text-primary-foreground py-3.5 rounded-sm font-semibold flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors mt-4"
+                onClick={() => setStep(1)}
+                className="text-xs font-bold uppercase text-muted-foreground hover:text-white flex items-center gap-1 transition-colors"
               >
-                Siguiente <ChevronRight size={18} />
+                <ChevronLeft size={16} /> Volver
               </button>
             </div>
-          )}
 
-          {step === 1 && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <Calendar size={40} className="text-primary mx-auto mb-3" />
-                <h2 className="text-xl font-bold text-white mb-1">¿Qué día?</h2>
-                <p className="text-sm text-muted-foreground">Elige la fecha para tu reserva</p>
-              </div>
-              <input
-                type="date"
-                value={date}
-                min={MIN_DATE}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full bg-secondary/50 border border-border text-white text-lg rounded-sm px-4 py-4 focus:outline-none focus:border-primary transition-colors text-center"
-              />
-              <div className="flex gap-3">
-                <button
-                  onClick={goBack}
-                  className="flex-1 bg-secondary text-white py-3.5 rounded-sm font-semibold flex items-center justify-center gap-2 hover:bg-secondary/80 transition-colors border border-border"
-                >
-                  <ChevronLeft size={18} /> Atrás
-                </button>
-                <button
-                  onClick={handleDateNext}
-                  disabled={!date || loadingSlots}
-                  className="flex-1 bg-primary text-primary-foreground py-3.5 rounded-sm font-semibold flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
-                >
-                  {loadingSlots ? "Consultando..." : "Siguiente"} <ChevronRight size={18} />
-                </button>
-              </div>
+            <div className="bg-secondary/30 border border-border rounded-sm p-4 mb-6 flex items-center gap-3 text-sm text-white">
+              <Info className="text-primary shrink-0" size={20} />
+              <p>
+                Mostrando disponibilidad para{" "}
+                <strong>{formData.guests} personas</strong> el{" "}
+                <strong>{formData.reservation_date}</strong>.
+              </p>
             </div>
-          )}
 
-          {step === 2 && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <Clock size={40} className="text-primary mx-auto mb-3" />
-                <h2 className="text-xl font-bold text-white mb-1">¿A qué hora y qué mesa?</h2>
-                <p className="text-sm text-muted-foreground">Selecciona un horario y luego una mesa disponible</p>
+            {availableSlots.length === 0 ? (
+              <div className="text-center py-10 border border-dashed border-border rounded-sm">
+                <p className="text-muted-foreground mb-4">
+                  Lo sentimos, no hay mesas con capacidad suficiente para ese
+                  día.
+                </p>
+                <button
+                  onClick={() => setStep(1)}
+                  className="text-primary font-bold text-sm uppercase tracking-widest hover:underline"
+                >
+                  Intentar otra fecha
+                </button>
               </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-3">Horarios disponibles</p>
-                <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto scrollbar-thin pr-1">
-                  {availableSlots.map((slot) => (
-                    <button
-                      key={slot.time}
-                      type="button"
-                      onClick={() => handleSelectTime(slot.time)}
-                      className={`py-3 rounded-sm text-xs font-semibold transition-colors border relative ${
-                        time === slot.time
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-secondary/50 text-white border-border hover:border-primary/50"
-                      }`}
-                    >
-                      {slot.time}
-                      <span className="block text-[9px] opacity-60 mt-0.5">
-                        {slot.tables?.length || 0} mesa(s)
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {time && selectedTable && (
+            ) : (
+              <div className="space-y-8">
                 <div>
-                  <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-3">Mesas disponibles a las {time}</p>
-                  <div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto scrollbar-thin pr-1">
-                    {availableSlots
-                      .find((s) => s.time === time)
-                      ?.tables?.map((table) => (
-                        <button
-                          key={table.id}
-                          type="button"
-                          onClick={() => setSelectedTable(table)}
-                          className={`p-3 rounded-sm text-left transition-colors border ${
-                            selectedTable?.id === table.id
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "bg-secondary/50 text-white border-border hover:border-primary/50"
-                          }`}
-                        >
-                          <span className="font-bold text-sm block">Mesa {table.table_number}</span>
-                          <span className="text-[10px] opacity-70 block mt-1">{table.type} · {table.capacity} pax</span>
-                          <span className="text-[10px] opacity-70 block">S/ {Number(table.reservation_price).toFixed(2)}</span>
-                        </button>
-                      ))}
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-3">
+                    1. Selecciona tu horario
+                  </label>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                    {availableSlots.map((slot) => (
+                      <button
+                        key={slot.time}
+                        onClick={() => handleSelectTime(slot.time)}
+                        className={`font-bold py-3 rounded-sm transition-all border ${
+                          formData.reservation_time === slot.time
+                            ? "bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/20"
+                            : "bg-background border-border text-white hover:border-primary hover:text-primary"
+                        }`}
+                      >
+                        {slot.time}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              )}
 
-              <div className="flex gap-3">
-                <button
-                  onClick={goBack}
-                  className="flex-1 bg-secondary text-white py-3.5 rounded-sm font-semibold flex items-center justify-center gap-2 hover:bg-secondary/80 transition-colors border border-border"
-                >
-                  <ChevronLeft size={18} /> Atrás
-                </button>
-                <button
-                  onClick={handleTimeNext}
-                  disabled={!time || !selectedTable}
-                  className="flex-1 bg-primary text-primary-foreground py-3.5 rounded-sm font-semibold flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
-                >
-                  Siguiente <ChevronRight size={18} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <User size={40} className="text-primary mx-auto mb-3" />
-                <h2 className="text-xl font-bold text-white mb-1">Tus datos</h2>
-                <p className="text-sm text-muted-foreground">Para confirmar la reserva</p>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                  Nombre completo
-                </label>
-                <div className="relative">
-                  <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm pl-10 pr-4 py-3 focus:outline-none focus:border-primary transition-colors"
-                    placeholder="Ej. Linus Torvalds"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                  Teléfono
-                </label>
-                <div className="relative">
-                  <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm pl-10 pr-4 py-3 focus:outline-none focus:border-primary transition-colors"
-                    placeholder="+51 999 888 777"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                  Comentarios (opcional)
-                </label>
-                <div className="relative">
-                  <MessageSquare size={16} className="absolute left-3 top-3 text-muted-foreground" />
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows="2"
-                    className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm pl-10 pr-4 py-3 focus:outline-none focus:border-primary transition-colors resize-none"
-                    placeholder="Alergias, celebración especial..."
-                  />
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={goBack}
-                  className="flex-1 bg-secondary text-white py-3.5 rounded-sm font-semibold flex items-center justify-center gap-2 hover:bg-secondary/80 transition-colors border border-border"
-                >
-                  <ChevronLeft size={18} /> Atrás
-                </button>
-                <button
-                  onClick={handleDetailsNext}
-                  disabled={!name.trim() || !phone.trim()}
-                  className="flex-1 bg-primary text-primary-foreground py-3.5 rounded-sm font-semibold flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
-                >
-                  Revisar <ChevronRight size={18} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {step === 4 && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <CheckCircle2 size={40} className="text-primary mx-auto mb-3" />
-                <h2 className="text-xl font-bold text-white mb-1">Confirma tu reserva</h2>
-                <p className="text-sm text-muted-foreground">Revisa los datos antes de enviar</p>
-              </div>
-              <div className="bg-secondary/30 border border-border rounded-sm p-5 space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Personas</span>
-                  <span className="text-white font-semibold">{guests}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Fecha</span>
-                  <span className="text-white font-semibold">{date}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Hora</span>
-                  <span className="text-white font-semibold">{time}</span>
-                </div>
-                {selectedTable && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Mesa</span>
-                    <span className="text-white font-semibold">Mesa {selectedTable.table_number} · {selectedTable.type}</span>
+                {formData.reservation_time && (
+                  <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-3">
+                      2. Selecciona tu mesa
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {availableSlots
+                        .find((s) => s.time === formData.reservation_time)
+                        ?.tables.map((table) => (
+                          <button
+                            key={table.id}
+                            onClick={() => handleSelectTable(table)}
+                            className="bg-background border border-border p-4 rounded-sm text-left hover:border-primary/50 hover:shadow-lg transition-all group relative overflow-hidden"
+                          >
+                            <div className="flex items-center gap-3 mb-2">
+                              <Armchair className="text-primary" size={20} />
+                              <span className="font-bold text-white text-lg group-hover:text-primary transition-colors">
+                                Mesa {table.table_number}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
+                              Zona: {table.type}
+                            </p>
+                            <div className="flex items-center justify-between mt-4 border-t border-border pt-3">
+                              <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                                <Users size={14} /> {table.capacity} pax
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                    </div>
                   </div>
                 )}
-                <div className="border-t border-border pt-3 mt-3">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Nombre</span>
-                    <span className="text-white font-semibold">{name}</span>
-                  </div>
-                  <div className="flex justify-between mt-1">
-                    <span className="text-muted-foreground">Teléfono</span>
-                    <span className="text-white font-semibold">{phone}</span>
-                  </div>
-                  {notes && (
-                    <div className="flex justify-between mt-1">
-                      <span className="text-muted-foreground">Comentarios</span>
-                      <span className="text-white font-semibold text-right max-w-[60%]">{notes}</span>
-                    </div>
-                  )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* --- PASO 3 (Al que la IA te manda pre-llenado) --- */}
+        {step === 3 && (
+          <form
+            onSubmit={handleSubmitReservation}
+            className="animate-in slide-in-from-right-8 duration-300"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <User className="text-primary" /> Datos del Cliente
+              </h2>
+              <button
+                onClick={() => setStep(2)}
+                className="text-xs font-bold uppercase text-muted-foreground hover:text-white flex items-center gap-1 transition-colors"
+              >
+                <ChevronLeft size={16} /> Volver
+              </button>
+            </div>
+
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Nombre Completo
+                </label>
+                <div className="relative">
+                  <User
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    size={16}
+                  />
+                  <input
+                    type="text"
+                    name="customer_name"
+                    required
+                    value={formData.customer_name}
+                    onChange={handleInputChange}
+                    placeholder="Ej. Linus Torvalds"
+                    className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm pl-10 pr-4 py-3 focus:outline-none focus:border-primary transition-colors"
+                  />
                 </div>
               </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={goBack}
-                  className="flex-1 bg-secondary text-white py-3.5 rounded-sm font-semibold flex items-center justify-center gap-2 hover:bg-secondary/80 transition-colors border border-border"
-                >
-                  <ChevronLeft size={18} /> Editar
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting}
-                  className="flex-1 bg-primary text-primary-foreground py-3.5 rounded-sm font-semibold flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
-                >
-                  {isSubmitting ? "Enviando..." : "Confirmar Reserva"} <CheckCircle2 size={18} />
-                </button>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    Correo Electrónico
+                  </label>
+                  <div className="relative">
+                    <Mail
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      size={16}
+                    />
+                    <input
+                      type="email"
+                      name="customer_email"
+                      required
+                      value={formData.customer_email}
+                      onChange={handleInputChange}
+                      placeholder="linus@linux.org"
+                      className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm pl-10 pr-4 py-3 focus:outline-none focus:border-primary transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    Teléfono de Contacto
+                  </label>
+                  <div className="relative">
+                    <Phone
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      size={16}
+                    />
+                    <input
+                      type="tel"
+                      name="customer_phone"
+                      required
+                      minLength="7"
+                      value={formData.customer_phone}
+                      onChange={handleInputChange}
+                      placeholder="+51 987 654 321"
+                      className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm pl-10 pr-4 py-3 focus:outline-none focus:border-primary transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Notas Adicionales (Opcional)
+                </label>
+                <div className="relative">
+                  <AlignLeft
+                    className="absolute left-3 top-4 text-muted-foreground"
+                    size={16}
+                  />
+                  <textarea
+                    name="notes"
+                    rows="3"
+                    value={formData.notes}
+                    onChange={handleInputChange}
+                    placeholder="Alergias, silla de bebé, motivo de celebración..."
+                    className="w-full bg-secondary/50 border border-border text-white text-sm rounded-sm pl-10 pr-4 py-3 focus:outline-none focus:border-primary transition-colors resize-none"
+                  />
+                </div>
               </div>
             </div>
-          )}
-        </div>
+
+            <div className="mt-8 p-4 bg-primary/10 border border-primary/20 rounded-sm text-sm text-primary mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                Resumen: <strong>{formData.guests} pax</strong> el{" "}
+                <strong>{formData.reservation_date}</strong> a las{" "}
+                <strong>{formData.reservation_time} hrs</strong>.
+              </div>
+              <div className="font-bold border border-primary/30 px-3 py-1.5 rounded-sm bg-primary/20 shrink-0">
+                {formData.selected_table_info
+                  ? `Mesa ${formData.selected_table_info.table_number} (${formData.selected_table_info.type})`
+                  : "Mesa por confirmar"}
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-widest text-sm py-4 rounded-sm transition-all flex justify-center items-center gap-2 disabled:opacity-50"
+            >
+              {isSubmitting ? "Enviando Solicitud..." : "Confirmar Reserva"}{" "}
+              <CheckCircle2 size={18} />
+            </button>
+          </form>
+        )}
+
+        {/* --- PASO 4 --- */}
+        {step === 4 && (
+          <div className="text-center py-10 animate-in zoom-in duration-500">
+            <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-500/20">
+              <CheckCircle2 size={40} className="text-emerald-500" />
+            </div>
+            <h2 className="text-3xl font-black text-white mb-4 uppercase tracking-wider">
+              ¡Status: 201 Created!
+            </h2>
+            <p className="text-muted-foreground text-lg mb-8 max-w-md mx-auto">
+              Tu mesa en LocalHost Lounge ha sido asegurada. Hemos enviado un
+              correo de confirmación a{" "}
+              <strong>{formData.customer_email}</strong>.
+            </p>
+
+            <div className="bg-secondary/50 border border-border rounded-sm p-6 inline-block text-left mb-8 space-y-2 min-w-75">
+              <p className="text-sm text-white">
+                <span className="text-muted-foreground w-20 inline-block">
+                  Nombre:
+                </span>{" "}
+                <strong>{formData.customer_name}</strong>
+              </p>
+              <p className="text-sm text-white">
+                <span className="text-muted-foreground w-20 inline-block">
+                  Fecha:
+                </span>{" "}
+                <strong>{formData.reservation_date}</strong>
+              </p>
+              <p className="text-sm text-white">
+                <span className="text-muted-foreground w-20 inline-block">
+                  Hora:
+                </span>{" "}
+                <strong>{formData.reservation_time} hrs</strong>
+              </p>
+              <p className="text-sm text-white">
+                <span className="text-muted-foreground w-20 inline-block">
+                  Mesa:
+                </span>{" "}
+                <strong>
+                  {formData.selected_table_info
+                    ? `${formData.selected_table_info.table_number} (${formData.guests} pax)`
+                    : "Por confirmar"}
+                </strong>
+              </p>
+            </div>
+
+            <div>
+              <button
+                onClick={() => {
+                  setStep(1);
+                  setFormData({
+                    guests: 2,
+                    reservation_date: today,
+                    reservation_time: "",
+                    table_id: "",
+                    selected_table_info: null,
+                    customer_name: "",
+                    customer_email: "",
+                    customer_phone: "",
+                    notes: "",
+                  });
+                }}
+                className="text-primary font-bold text-sm uppercase tracking-widest hover:underline"
+              >
+                Hacer otra reserva
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
