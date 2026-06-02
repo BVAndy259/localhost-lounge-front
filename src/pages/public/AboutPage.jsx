@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Terminal, Monitor, Coffee } from "lucide-react";
 
+
 export const AboutPage = () => {
   useEffect(() => window.scrollTo(0, 0), []);
 
@@ -33,7 +34,7 @@ export const AboutPage = () => {
           </p>
         </div>
         <div className="bg-secondary/30 border border-border p-10 rounded-sm flex min-h-75 items-center justify-center">
-          <Terminal size={100} className="text-primary/20" />
+          <img src="https://res.cloudinary.com/dpd6ft15e/image/upload/q_auto/f_auto/v1780404816/reserva-salon-la-trastienda-800x533_lnyclj.jpg" alt="" />
         </div>
       </div>
 
